@@ -1,21 +1,18 @@
-// 임시 확인용 (확인 후 삭제): 인플루언서 인증 표시가 블로그 데이터 어디에 있는지 비교
-const UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148';
-const flat = (o, p = '', out = {}) => { if (o && typeof o === 'object') { for (const [k, v] of Object.entries(o)) flat(v, p ? `${p}.${k}` : k, out); } else out[p] = o; return out; };
+// 임시 확인용 (확인 후 삭제): 네이버 블로그 탭 검색 결과에 인플루언서 표시가 있는지 확인
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 module.exports = async function handler(req, res) {
-  const ids = String(req.query.ids || 'pso164,titan742').split(',').slice(0, 3);
-  const out = {};
-  for (const id of ids) {
-    const H = { Accept: 'application/json', Referer: `https://m.blog.naver.com/${id}`, 'User-Agent': UA };
-    const r = {};
-    try { r.info = flat(((await (await fetch(`https://m.blog.naver.com/api/blogs/${id}`, { headers: H })).json()).result) || {}); } catch (e) { r.infoErr = e.message; }
+  const tests = [['pso164', '과학커뮤니케이터 박종현'], ['notsilly', '코코넛 블로그'], ['titan742', '작은거인 블로그']];
+  const out = [];
+  for (const [id, q] of tests) {
     try {
-      const html = await (await fetch(`https://m.blog.naver.com/${id}`, { headers: { 'User-Agent': UA } })).text();
-      r.htmlHits = [...html.matchAll(/.{0,60}(?:[Ii]nfluencer|인플루언서|in\.naver\.com|certif|badge|Badge).{0,60}/g)].map((m) => m[0].replace(/\s+/g, ' ')).slice(0, 12);
-    } catch (e) { r.htmlErr = e.message; }
-    out[id] = r;
+      const r = await fetch('https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(q), { headers: { 'User-Agent': UA, 'Accept-Language': 'ko-KR' }, signal: AbortSignal.timeout(8000) });
+      const html = await r.text();
+      const i = html.indexOf(`blog.naver.com/${id}`);
+      const near = i >= 0 ? html.slice(Math.max(0, i - 1500), i + 600) : '';
+      out.push({ id, status: r.status, len: html.length, foundBlog: i >= 0,
+        nearHits: [...near.matchAll(/.{0,80}(?:in\.naver\.com|[Ii]nfluencer|인플루언서|ico_|badge|verified|인증).{0,80}/g)].map((m) => m[0].replace(/\s+/g, ' ')).slice(0, 8),
+        pageHasInfluencer: /인플루언서|in\.naver\.com/.test(html), captcha: /captcha|자동입력/i.test(html) });
+    } catch (e) { out.push({ id, error: e.message }); }
   }
-  // 두 블로그의 정보 필드 중 값이 다른 것만
-  const [a, b] = ids; const A = out[a].info || {}, B = out[b].info || {};
-  out.diff = Object.keys({ ...A, ...B }).filter((k) => typeof (A[k] ?? B[k]) !== 'string' || k.length < 40).filter((k) => JSON.stringify(A[k]) !== JSON.stringify(B[k]) && typeof (A[k] ?? B[k]) === 'boolean').map((k) => `${k}: ${a}=${A[k]} / ${b}=${B[k]}`);
   res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(out));
 };
