@@ -1,7 +1,7 @@
 // 블로그 프로필·글별 반응 (비공식)
 // 네이버 모바일 블로그 화면이 쓰는 내부 주소에서 이웃 수, 방문자 수, 글별 공감·댓글 수를 가져온다.
 // 공식 API가 아니므로 네이버가 막거나 형식을 바꾸면 언제든 실패할 수 있다. 실패하면 화면은 이 값들 없이 동작한다.
-const { ID_RE } = require('./rss');
+const { ID_RE, getBlog } = require('./rss');
 const store = require('../lib/store');
 
 const BASE = 'https://m.blog.naver.com/api/blogs/';
@@ -21,18 +21,46 @@ async function getJson(url, blogId) {
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-// 인플루언서 확인: in.naver.com/{블로그ID}가 열리고, 그 인플루언서 홈이 '이 블로그'를 연결하고 있을 때만 확인됨으로 본다.
-// - 같은 이름의 다른 블로그를 인플루언서로 잘못 보지 않게 홈에 연결된 블로그를 꼭 확인한다 (예: 홈 coconut38 → 블로그 notsilly).
-// - 인플루언서 홈 ID가 블로그 ID와 다르면 찾을 수 없으므로, 확인되지 않았다고 '아님'으로 단정하지 않는다.
+// 인플루언서 확인 (두 단계, 비공식)
+// 1) in.naver.com/{블로그ID}가 열리고 그 홈이 '이 블로그'를 연결하면 확인됨
+// 2) 아니면 이 블로그의 최근 글 제목으로 네이버 블로그 탭을 검색해, 그 글의 작성자 링크가 in.naver.com/○○이면 확인됨
+//    (검색 결과에서 인플루언서 글은 작성자 링크가 블로그 대신 인플루언서 홈으로 걸린다. 홈 ID가 블로그 ID와 달라도 찾을 수 있다)
+// 둘 다 아니면 '아님'으로 단정하지 않는다.
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-async function influencerHome(id) {
+async function homeLinksBlog(handle, id) {
   try {
-    const r = await fetch(`https://in.naver.com/${encodeURIComponent(id)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(6000) });
-    if (r.status !== 200) return null;
+    const r = await fetch(`https://in.naver.com/${encodeURIComponent(handle)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(6000) });
+    if (r.status !== 200) return false;
     const html = await r.text();
-    const linked = new Set([...html.matchAll(/blog\.naver\.com\/([\w-]{3,30})/g)].map((m) => m[1].toLowerCase()));
-    return linked.has(id.toLowerCase()) ? `https://in.naver.com/${id}` : null;
+    return new Set([...html.matchAll(/blog\.naver\.com\/([\w-]{3,30})/g)].map((m) => m[1].toLowerCase())).has(id.toLowerCase());
+  } catch (_) { return false; }
+}
+async function influencerFromSearch(id, title) {
+  if (!title) return null;
+  try {
+    const q = '"' + title.replace(/["“”]/g, ' ').trim() + '"';
+    const r = await fetch('https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(q), { headers: { 'User-Agent': UA, 'Accept-Language': 'ko-KR' }, signal: AbortSignal.timeout(7000) });
+    if (!r.ok) return null;
+    const html = await r.text();
+    const re = new RegExp(`blog\\.naver\\.com\\/${id.replace(/[-]/g, '\\-')}(?=[\\/"?])`, 'gi');
+    for (const m of html.matchAll(re)) {
+      // 이 글 링크 바로 앞 작성자 영역에서 인플루언서 홈 링크를 찾는다. 사이에 다른 블로그 링크가 끼면 다른 글이므로 버린다
+      const before = html.slice(Math.max(0, m.index - 2500), m.index);
+      const homes = [...before.matchAll(/href="https:\/\/in\.naver\.com\/([\w.-]{2,40})"/g)];
+      if (!homes.length) continue;
+      const last = homes[homes.length - 1];
+      const between = before.slice(last.index);
+      const others = [...between.matchAll(/blog\.naver\.com\/([\w-]{3,30})/g)].filter((x) => x[1].toLowerCase() !== id.toLowerCase());
+      if (!others.length) return `https://in.naver.com/${last[1]}`;
+    }
+    return null;
   } catch (_) { return null; }
+}
+async function influencerHome(id, titles = []) {
+  if (await homeLinksBlog(id, id)) return { url: `https://in.naver.com/${id}`, via: 'home' };
+  // 방금 쓴 글은 아직 검색에 없을 수 있어 조금 지난 글부터 최대 2개 시도
+  for (const t of titles.slice(0, 2)) { const s = await influencerFromSearch(id, t); if (s) return { url: s, via: 'search' }; }
+  return null;
 }
 
 async function load(id) {
@@ -40,7 +68,7 @@ async function load(id) {
     getJson(`${BASE}${id}`, id),
     getJson(`${BASE}${id}/post-list?categoryNo=0&itemCount=30&page=1`, id),
     getJson(`${BASE}${id}/popular-post-list`, id),
-    influencerHome(id),
+    getBlog(id).then((bl) => { const it = [...(bl.items || [])].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)); return influencerHome(id, [it[3], it[1]].filter(Boolean).map((x) => x.title)); }).catch(() => influencerHome(id, [])),
   ]);
   const out = { blogId: id, fetchedAt: new Date().toISOString(), profile: null, posts: [], popular: [], errors: [] };
   if (info.status === 'fulfilled') {
@@ -60,7 +88,8 @@ async function load(id) {
       citations: r.mateCitations ? { thisMonth: num(r.mateCitations.currentMonthCount), month: num(r.mateCitations.currentMonth),
         cumulative: num(r.mateCitations.cumulativeCount), period: num(r.mateCitations.selectionPeriodCount), periodMonth: num(r.mateCitations.selectionPeriodMonth) } : null,
       topic: r.blogDirectoryName || '',
-      influencerHome: infl.status === 'fulfilled' ? infl.value : null,
+      influencerHome: infl.status === 'fulfilled' && infl.value ? infl.value.url : null,
+      influencerVia: infl.status === 'fulfilled' && infl.value ? infl.value.via : null,
       coverImage: (r.mobileTitleImage && (r.mobileTitleImage.croppedImage || r.mobileTitleImage.originalImage)) || '',
       profileImage: r.profileImagePath || '',
     };

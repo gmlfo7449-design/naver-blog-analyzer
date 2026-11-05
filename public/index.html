@@ -884,7 +884,7 @@ function renderCompare(tableOnly) {
     ['AI 브리핑 인용 (이번 달)', (s, b) => { if (profLoading(b)) return '…'; const c = PV(b, 'citations'); return c ? c.thisMonth : null; }, 'hi'],
     ['AI 브리핑 인용 (누적)', (s, b) => { if (profLoading(b)) return '…'; const c = PV(b, 'citations'); return c ? c.cumulative : null; }, 'hi'],
     ['인플루언서', (s, b) => { if (profLoading(b)) return '…'; const h = PV(b, 'influencerHome');
-      return h ? `<a href="${esc(h)}" target="_blank" rel="noopener" style="color:var(--ok);font-weight:700;text-decoration:none">확인됨</a>` : `<span class="hint">자동 확인 안 됨</span> <a href="${inflSearch(b)}" target="_blank" rel="noopener" class="verify" style="margin:0">직접 확인</a>`; }],
+      return h ? `<a href="${esc(h)}" target="_blank" rel="noopener" style="color:var(--ok);font-weight:700;text-decoration:none">확인됨</a> <span class="hint">${esc(h.replace('https://', ''))}</span>` : `<span class="hint">자동 확인 안 됨</span> <a href="${inflSearch(b)}" target="_blank" rel="noopener" class="verify" style="margin:0">직접 확인</a>`; }],
     ['sec', '규모와 반응'],
     ['이웃 수', (s, b) => PV(b, 'neighbors'), 'hi'], ['누적 방문자', (s, b) => PV(b, 'totalVisitors'), 'hi'], ['오늘 방문자', (s, b) => PV(b, 'todayVisitors'), 'hi'],
     ['글당 평균 공감', (s, b) => RV(b, 'likes'), 'hi'], ['글당 평균 댓글', (s, b) => RV(b, 'comments'), 'hi'],
