@@ -277,6 +277,7 @@
       <h2>블로그 비교 <small>형광펜이 칠해진 값이 그 항목에서 가장 좋은 블로그입니다</small></h2>
       <div class="scroll"><table id="cmpTable"></table></div>
       <div class="meta" id="cmpMeta"></div>
+      <p class="hint hidden" id="cmpWeekHint" style="margin-top:8px">글을 자주 쓰는 블로그가 있어 최근 글 30개가 덮는 공통 기간이 4주가 안 돼요. 그래서 주차별 추이 차트는 숨기고, 발행 빈도는 위 표의 주 평균 발행과 발행 간격으로 비교합니다.</p>
     </div>
     <div class="card">
       <h2>방문자 추이 <small>블로그별 날짜별 방문자 수예요. 값이 없는 날은 비워 둡니다.</small></h2>
@@ -332,7 +333,7 @@
       <ul class="insights" id="insights"></ul>
     </div>
     <div class="grid" style="margin-top:16px">
-      <div class="card"><h2>주차별 발행 수</h2><div class="chart-box"><canvas id="cWeek"></canvas></div></div>
+      <div class="card" id="weekCard"><h2>주차별 발행 수</h2><div class="chart-box"><canvas id="cWeek"></canvas></div></div>
       <div class="card"><h2>카테고리 분포</h2><div class="chart-box"><canvas id="cCat"></canvas></div></div>
     </div>
     <div class="card">
@@ -355,6 +356,7 @@
 </div>
 
 <script>
+const MIN_WEEKS = 4; // 주차별 차트는 4주 이상일 때만 의미가 있어 보여준다
 const POST_LIMIT = 30; // 보고서는 최근 글 30개 기준 (제목 노출 확인과 같은 범위)
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const STOP = new Set(['그리고','하는','있는','위한','대한','이번','에서','으로','하기','합니다','입니다','the','and','for','with']);
@@ -570,7 +572,8 @@ function render() {
   const css = getComputedStyle(document.documentElement);
   const accent = css.getPropertyValue('--accent').trim(), muted = css.getPropertyValue('--muted').trim(), line = css.getPropertyValue('--line').trim();
   Chart.defaults.color = muted; Chart.defaults.borderColor = line;
-  charts.push(new Chart(document.getElementById('cWeek'), {
+  document.getElementById('weekCard').classList.toggle('hidden', s.weeks.length < MIN_WEEKS);
+  if (s.weeks.length >= MIN_WEEKS) charts.push(new Chart(document.getElementById('cWeek'), {
     type: 'bar', data: { labels: s.weeks.map((w) => w[0]), datasets: [{ data: s.weeks.map((w) => w[1]), backgroundColor: accent, borderRadius: 4 }] },
     options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } },
   }));
@@ -793,7 +796,7 @@ function renderCompare(tableOnly) {
   const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
   const rows = [
     ['sec', '발행'],
-    ['분석된 글 수', (s) => s.n], ['주 평균 발행', (s) => s.perWeek, 'hi'], ['발행 간격 중앙값(일)', (s) => s.medGap, 'lo'],
+    ['분석된 글 수', (s) => s.n], ['주 평균 발행', (s) => s.perWeek, 'hi'], ['발행 간격 중앙값(시간)', (s) => (s.medGapRaw == null ? null : Math.round(s.medGapRaw * 24 * 10) / 10), 'lo'],
     ['최근 30일 발행', (s) => s.last30, 'hi'], ['마지막 발행(일 전)', (s) => Math.round(s.daysSinceLast), 'lo'],
     ['최장 공백(일)', (s) => s.maxGap, 'lo'], ['글 없는 주', (s) => `${s.zeroWeeks}/${s.weeks.length}주`],
     ['주력 요일', (s) => s.topDays.map((d) => DAYS[d]).join('·')], ['주력 시간대', (s) => s.topHours.map((h) => h + '시').join('·')],
@@ -842,6 +845,9 @@ function renderCompare(tableOnly) {
   const last = new Date(Math.max(...live.map((b) => weekStart(b.stats.newest).getTime())));
   const keys = []; for (let w = first; w <= last; w = new Date(w.getTime() + 7 * 864e5)) keys.push(w.toISOString().slice(0, 10));
   const cut = live.filter((b) => weekStart(b.stats.oldest).getTime() < first.getTime());
+  const weekCard = document.getElementById('cmpWeekNote').closest('.card');
+  weekCard.classList.toggle('hidden', keys.length < MIN_WEEKS);
+  if (keys.length < MIN_WEEKS) { document.getElementById('cmpWeekHint').classList.remove('hidden'); } else document.getElementById('cmpWeekHint').classList.add('hidden');
   document.getElementById('cmpWeekNote').textContent = `${keys[0].slice(5).replace('-', '/')}주부터 ${keys[keys.length - 1].slice(5).replace('-', '/')}주까지 ${keys.length}주, 모든 블로그의 데이터가 있는 기간만 비교합니다.`
     + (cut.length ? ` ${live.find((b) => weekStart(b.stats.oldest).getTime() === first.getTime()) ? nameOf(live.find((b) => weekStart(b.stats.oldest).getTime() === first.getTime())) : ''}의 최근 글 30개가 이 시점까지만 거슬러 가기 때문이에요.` : '');
   charts.push(new Chart(document.getElementById('cmpWeek'), {
