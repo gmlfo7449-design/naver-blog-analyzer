@@ -806,14 +806,17 @@ function verdictOf(b) {
   const parts = [sm.missing ? `${sm.missing}건이 누락` : '', sm.pending ? `${sm.pending}건이 반영중` : ''].filter(Boolean).join(', ');
   return [`최근 글 ${t}건 중 <mark>${sm.shown}건</mark>이 검색에 나오고, ${parts}이에요`, why + ' 누락은 게시물 목록의 \'직접 확인\'으로 한 번 더 확인하세요.'];
 }
+const mateLabel = (pr) => pr && pr.naverMate ? `네이버 메이트${pr.mate && pr.mate.topic ? ' · ' + pr.mate.topic : ''}${pr.mate && pr.mate.month ? ` (${pr.mate.year}년 ${pr.mate.month}월)` : ''}` : '';
+const inflSearch = (b) => { const pr = b.prof && b.prof.status === 'ok' && b.prof.data.profile; const q = (pr && pr.nickName) || nameOf(b);
+  return 'https://search.naver.com/search.naver?query=' + encodeURIComponent(q + ' 인플루언서'); };
 function renderMast(el, b) {
   if (!el || !b) return;
   const d = b.data, pr = b.prof && b.prof.status === 'ok' ? b.prof.data.profile : null;
   const cover = pr && pr.coverImage ? pr.coverImage.replace(/^http:\/\/([a-z0-9]+)\.phinf\.naver\.net/i, 'https://$1-phinf.pstatic.net').replace(/^http:/, 'https:') : '';
   el.style.backgroundImage = cover ? `url("${cover.replace(/"/g, '%22')}")` : '';
-  const badges = pr ? [pr.officialBlog && '공식 블로그', pr.powerBlog && '파워블로그', pr.naverMate && '네이버 메이트'].filter(Boolean) : [];
+  const badges = pr ? [pr.officialBlog && '공식 블로그', pr.powerBlog && '파워블로그', pr.naverMate && mateLabel(pr)].filter(Boolean) : [];
   const link = d.channel.link || 'https://blog.naver.com/' + d.blogId;
-  const facts = [pr && pr.nickName ? esc(pr.nickName) : '', esc('blog.naver.com/' + d.blogId),
+  const facts = [pr && pr.nickName ? esc(pr.nickName) : '', esc('blog.naver.com/' + d.blogId), pr && pr.topic ? esc(pr.topic) : '',
     pr && pr.neighbors != null ? `이웃 ${fmtN(pr.neighbors)}명` : '', pr && pr.totalVisitors != null ? `누적 방문 ${fmtN(pr.totalVisitors)}명` : ''].filter(Boolean);
   const [v, why] = verdictOf(b);
   el.innerHTML = `<a class="open" href="${esc(link)}" target="_blank" rel="noopener">블로그 열기</a>
@@ -835,6 +838,10 @@ function renderKpis(b) {
     s.perWeek >= 7 ? [`${Math.round(s.perWeek / 7 * 10) / 10}<small>회</small>`, '하루 평균 발행', gapText(s.medGapRaw)] : [`${s.perWeek ?? '-'}<small>회</small>`, '주 평균 발행', gapText(s.medGapRaw)],
     [rs && rs.likes != null ? `${rs.likes}<small>개</small>` : wait, '글당 평균 공감', rs && rs.comments != null ? `댓글은 평균 ${rs.comments}개` : ''],
   ];
+  const ci = pr && pr.citations;
+  k.push([ci && ci.thisMonth != null ? `${fmtN(ci.thisMonth)}<small>회</small>` : (b.prof && b.prof.status === 'loading' ? '…' : '-'), 'AI 브리핑 인용 (이번 달)',
+    ci && ci.cumulative != null ? `누적 ${fmtN(ci.cumulative)}회` : (pr ? '인용 기록 없음' : '')]);
+  k.push([pr ? (pr.naverMate ? '선정' : '아님') : (b.prof && b.prof.status === 'loading' ? '…' : '-'), '네이버 메이트', pr && pr.naverMate ? esc(mateLabel(pr).replace('네이버 메이트 · ', '')) : (pr ? `<a href="${inflSearch(b)}" target="_blank" rel="noopener" style="color:inherit">인플루언서는 직접 확인</a>` : '')]);
   const ps = popSum(b);
   k.push([ps != null ? `${fmtN(ps)}<small>회</small>` : wait, '지난주 인기글 조회수 합', ps != null ? `인기글 ${popOf(b).length}개 기준` : '']);
   document.getElementById('kpis').innerHTML = k.map(([v, l, n]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div>${n ? `<div class="n">${n}</div>` : ''}</div>`).join('');
@@ -871,6 +878,12 @@ function renderCompare(tableOnly) {
     ['카테고리 수', (s) => s.cats.size], ['최다 카테고리', (s) => { const [c] = topN(s.cats, 1); return `${esc(c[0])} ${Math.round(c[1] / s.n * 100)}%`; }],
     ['글당 평균 태그', (s) => s.avgTags, 'hi'], ['태그 없는 글', (s) => s.noTag, 'lo'], ['제목 평균 길이(자)', (s) => s.avgTitle],
     ['대표 이미지 포함률', (s) => s.thumbRate + '%'],
+    ['sec', '배지와 인증'],
+    ['블로그 주제', (s, b) => (profLoading(b) ? '…' : (PV(b, 'topic') || null))],
+    ['네이버 메이트', (s, b) => { if (profLoading(b)) return '…'; const pr = b.prof.status === 'ok' && b.prof.data.profile; return pr ? (pr.naverMate ? `<b style="color:var(--ok)">선정</b> <span class="hint">${esc(mateLabel(pr).replace('네이버 메이트 · ', ''))}</span>` : '아님') : null; }],
+    ['AI 브리핑 인용 (이번 달)', (s, b) => { if (profLoading(b)) return '…'; const c = PV(b, 'citations'); return c ? c.thisMonth : null; }, 'hi'],
+    ['AI 브리핑 인용 (누적)', (s, b) => { if (profLoading(b)) return '…'; const c = PV(b, 'citations'); return c ? c.cumulative : null; }, 'hi'],
+    ['인플루언서', (s, b) => (profLoading(b) ? '…' : `<a href="${inflSearch(b)}" target="_blank" rel="noopener" class="verify" style="margin:0">네이버에서 직접 확인</a>`)],
     ['sec', '규모와 반응'],
     ['이웃 수', (s, b) => PV(b, 'neighbors'), 'hi'], ['누적 방문자', (s, b) => PV(b, 'totalVisitors'), 'hi'], ['오늘 방문자', (s, b) => PV(b, 'todayVisitors'), 'hi'],
     ['글당 평균 공감', (s, b) => RV(b, 'likes'), 'hi'], ['글당 평균 댓글', (s, b) => RV(b, 'comments'), 'hi'],

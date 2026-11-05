@@ -39,6 +39,12 @@ async function load(id) {
       officialBlog: !!r.officialBlog,
       powerBlog: !!r.powerBlog,
       naverMate: !!r.isNaverMateBlog,
+      // 메이트 선정 정보 (선정된 블로그만): 주제, 선정 연월
+      mate: r.isNaverMateBlog && r.mateInfo ? { topic: r.mateInfo.topic || '', year: num(r.mateInfo.year), month: num(r.mateInfo.month) } : null,
+      // AI 브리핑 인용 수 (메이트 선정에 쓰이는 지표). 값이 없는 블로그도 많다
+      citations: r.mateCitations ? { thisMonth: num(r.mateCitations.currentMonthCount), month: num(r.mateCitations.currentMonth),
+        cumulative: num(r.mateCitations.cumulativeCount), period: num(r.mateCitations.selectionPeriodCount), periodMonth: num(r.mateCitations.selectionPeriodMonth) } : null,
+      topic: r.blogDirectoryName || '',
       coverImage: (r.mobileTitleImage && (r.mobileTitleImage.croppedImage || r.mobileTitleImage.originalImage)) || '',
       profileImage: r.profileImagePath || '',
     };
