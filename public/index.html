@@ -163,7 +163,7 @@
       <div class="meta" id="meta"></div>
     </div>
     <div class="card" id="expoCard">
-      <h2>제목 노출 <small>최근 글 30개 제목을 블로그 검색에 넣어 30위 안에 나오는지 확인합니다 (네이버 검색 API 기준)</small></h2>
+      <h2>제목 노출 <small>최근 글 30개 제목을 블로그 검색에 넣어 내 글이 나오는지 확인합니다 (네이버 검색 API 기준)</small></h2>
       <div id="expo"></div>
     </div>
     <div class="card">
@@ -271,7 +271,7 @@ function analyze(data) {
 }
 
 // ---- 제목 노출 (검색 API) ----
-const ST = { shown: '노출', pending: '미반영', missing: '누락', error: '확인 실패' };
+const ST = { shown: '정상', pending: '미반영', missing: '누락', error: '확인 실패' };
 const stCls = (x) => x.status === 'error' ? 'rerr' : x.status;
 function expoSummary(e) {
   const c = { shown: 0, pending: 0, missing: 0, error: 0 };
@@ -286,7 +286,7 @@ function expoRefresh(b) {
 async function fetchExpoBatch(id, offset) {
   for (let t = 0; t < 3; t++) {          // 요청 자체가 실패하면 2번 더 시도
     try {
-      const r = await fetch(`/api/exposure?v=5&id=${encodeURIComponent(id)}&offset=${offset}&limit=${EXPO_BATCH}${t ? '&retry=' + Date.now() : ''}`);
+      const r = await fetch(`/api/exposure?v=6&id=${encodeURIComponent(id)}&offset=${offset}&limit=${EXPO_BATCH}${t ? '&retry=' + Date.now() : ''}`);
       const body = await r.json();
       if (r.ok) return { ok: true, body };
       if (body.code === 'no_key' || r.status === 400 || r.status === 404) return { ok: false, fatal: true, body };
@@ -325,7 +325,7 @@ function expoRankCell(b, item) {
   const logNo = (item.link.match(/\/(\d{9,})/) || [])[1];
   const x = b.expo.map.get(logNo);
   if (!x) return b.expo.status === 'loading' ? '<span class="hint">확인 중…</span>' : '<span class="hint">-</span>';
-  const badge = `<span class="rk ${stCls(x)}" title="${x.rank ? '검색 ' + x.rank + '위' : ''}">${ST[x.status]}${x.rank ? ` <small>${x.rank}위</small>` : ''}</span>`;
+  const badge = `<span class="rk ${stCls(x)}"${x.skipped ? ' title="발행 1시간 이내라 아직 검색하지 않았어요"' : ''}>${ST[x.status]}</span>`;
   return x.status === 'shown' ? badge : `${badge} <a class="verify" href="${naverBlogSearch(item.title)}" target="_blank" rel="noopener" title="네이버 블로그 탭에서 이 제목을 검색해 직접 확인">직접 확인</a>`;
 }
 const naverBlogSearch = (title) => 'https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(title);
@@ -338,12 +338,12 @@ function renderExpo() {
   const loading = e.status === 'loading';
   const head = loading ? `<div class="hint" style="margin-bottom:10px">최근 글 제목을 검색하는 중이에요 · <b>${e.done}/${e.total}</b>개 확인</div>` : '';
   const retry = !loading && s.error ? `<button class="ghost" type="button" id="expoRetry" style="margin-top:10px;padding:6px 12px;font-size:13px">확인 실패 ${s.error}개 다시 확인</button>` : '';
-  el.innerHTML = head + `<div class="expo"><div><div class="hint">노출</div><div class="big">${s.shown}<small>/${s.n}건</small></div>
-    <div class="hint" style="margin-top:6px">노출 ${s.shown} · 미반영 ${s.pending} · 누락 ${s.missing}${s.error ? ` · 확인 실패 ${s.error}` : ''}</div>
+  el.innerHTML = head + `<div class="expo"><div><div class="hint">정상</div><div class="big">${s.shown}<small>/${s.n}건</small></div>
+    <div class="hint" style="margin-top:6px">정상 ${s.shown} · 미반영 ${s.pending} · 누락 ${s.missing}${s.error ? ` · 확인 실패 ${s.error}` : ''}</div>
     ${e.data.checkedAt ? `<div class="hint" style="margin-top:6px">확인 시각 ${fmtDate(e.data.checkedAt)}</div>` : ''}${retry}</div>
-    <div><div class="sq">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)} · ${ST[x.status]}${x.rank ? ' ' + x.rank + '위' : ''}"></span>`).join('')}${'<span></span>'.repeat(Math.max(0, (e.total || 0) - e.data.results.length))}</div>
-    <div class="lg"><span><i class="shown"></i>노출: 검색 ${e.data.display}위 안</span><span><i class="pending"></i>미반영: ${e.data.display}위 밖, 발행 ${e.data.pendingHours}시간 이내</span><span><i class="missing"></i>누락: ${e.data.display}위 밖, 발행 ${e.data.pendingHours}시간 지남</span></div>
-    <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. <b>노출은 확실하지만, 미반영·누락은 검색 API에서 못 찾았다는 뜻일 뿐이에요.</b> 검색 API는 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 아래 게시물 목록의 '직접 확인'으로 실제 화면을 확인해 주세요.</p></div></div>`;
+    <div><div class="sq">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)} · ${ST[x.status]}"></span>`).join('')}${'<span></span>'.repeat(Math.max(0, (e.total || 0) - e.data.results.length))}</div>
+    <div class="lg"><span><i class="shown"></i>정상: 검색에 나옴</span><span><i class="pending"></i>미반영: 발행 ${e.data.pendingHours || 24}시간 이내 (1시간 이내는 검색 안 함)</span><span><i class="missing"></i>누락: 발행 ${e.data.pendingHours || 24}시간이 지났는데 검색에 없음</span></div>
+    <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. <b>정상은 확실하지만, 미반영·누락은 검색 API에서 못 찾았다는 뜻일 뿐이에요.</b> 검색 API는 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 아래 게시물 목록의 '직접 확인'으로 실제 화면을 확인해 주세요.</p></div></div>`;
 }
 
 document.addEventListener('click', (ev) => {
@@ -465,8 +465,8 @@ function renderCompare(tableOnly) {
     ['카테고리 수', (s) => s.cats.size], ['최다 카테고리', (s) => { const [c] = topN(s.cats, 1); return `${esc(c[0])} ${Math.round(c[1] / s.n * 100)}%`; }],
     ['글당 평균 태그', (s) => s.avgTags, 'hi'], ['태그 없는 글', (s) => s.noTag, 'lo'], ['제목 평균 길이(자)', (s) => s.avgTitle],
     ['대표 이미지 포함률', (s) => s.thumbRate + '%'],
-    ['sec', '제목 노출 (최근 글 30개, 검색 30위 기준)'],
-    ['노출', 'shown'], ['미반영', 'pending'], ['누락', 'missing'],
+    ['sec', '제목 노출 (최근 글 30개)'],
+    ['정상', 'shown'], ['미반영', 'pending'], ['누락', 'missing'],
     ['sec', '운영 진단 (참고 기준)'],
     ...['발행량', '꾸준함', '최근 활동', '태그 활용'].map((label, k) => [label, (s) => { const d = diagnose(s)[k]; return `<span class="pill ${d[1]}">${L[d[1]]}</span>`; }]),
   ];
