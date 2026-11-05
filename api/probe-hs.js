@@ -17,6 +17,7 @@ module.exports = async function handler(req, res) {
     const idx = [...html.matchAll(new RegExp(`blog\\.naver\\.com\\/${id}`, 'gi'))].map((m) => m.index);
     const homes = [...html.matchAll(/in\.naver\.com\/([\w.-]{2,40})/g)].map((m) => ({ h: m[1], at: m.index }));
     out.searches.push({ k, title: t.slice(0, 40), pubDate: it[k].pubDate, status: r.status, len: html.length, blogLinkAt: idx.slice(0, 5), homes: homes.slice(0, 8),
+      nearHomes: idx.length ? [...html.slice(Math.max(0, idx[0] - 4000), idx[0] + 200).matchAll(/.{0,40}in\.naver\.com[^"'\s<]{0,60}.{0,20}/g)].map((m) => m[0].replace(/\s+/g, ' ')) : [],
       firstBlogLinkContext: idx.length ? html.slice(Math.max(0, idx[0] - 300), idx[0] + 120).replace(/\s+/g, ' ') : '' });
   }
   res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(out));
