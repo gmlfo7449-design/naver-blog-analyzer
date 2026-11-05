@@ -21,12 +21,17 @@ async function getJson(url, blogId) {
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-// 인플루언서 확인: in.naver.com/{블로그ID}가 열리면 인플루언서로 '확인'한다.
-// 인플루언서 홈 ID가 블로그 ID와 다른 경우가 있어서, 열리지 않는다고 '아님'으로 단정하지 않는다.
+// 인플루언서 확인: in.naver.com/{블로그ID}가 열리고, 그 인플루언서 홈이 '이 블로그'를 연결하고 있을 때만 확인됨으로 본다.
+// - 같은 이름의 다른 블로그를 인플루언서로 잘못 보지 않게 홈에 연결된 블로그를 꼭 확인한다 (예: 홈 coconut38 → 블로그 notsilly).
+// - 인플루언서 홈 ID가 블로그 ID와 다르면 찾을 수 없으므로, 확인되지 않았다고 '아님'으로 단정하지 않는다.
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 async function influencerHome(id) {
   try {
-    const r = await fetch(`https://in.naver.com/${encodeURIComponent(id)}`, { redirect: 'follow', signal: AbortSignal.timeout(6000) });
-    return r.status === 200 && /in\.naver\.com/.test(r.url) ? `https://in.naver.com/${id}` : null;
+    const r = await fetch(`https://in.naver.com/${encodeURIComponent(id)}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(6000) });
+    if (r.status !== 200) return null;
+    const html = await r.text();
+    const linked = new Set([...html.matchAll(/blog\.naver\.com\/([\w-]{3,30})/g)].map((m) => m[1].toLowerCase()));
+    return linked.has(id.toLowerCase()) ? `https://in.naver.com/${id}` : null;
   } catch (_) { return null; }
 }
 
