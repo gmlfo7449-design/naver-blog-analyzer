@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>블로그 발행 분석기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d21; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #03a94d; --accent-soft: #e6f6ed; --warn: #b45309; --warn-soft: #fef3c7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111315; --card: #1a1d21; --text: #e8eaed; --muted: #9aa0a6; --line: #2c3036;
+      --accent: #2fd27a; --accent-soft: #163322; --warn: #fbbf24; --warn-soft: #3a2e0f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  input[type=text] { flex: 1 1 320px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); color: var(--text); font-size: 15px; }
+  button { padding: 12px 18px; border: 0; border-radius: 10px; background: var(--accent); color: #fff;
+    font-weight: 600; font-size: 15px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .notice { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin: 16px 0; line-height: 1.5; }
+  .error { background: #fee2e2; color: #b91c1c; border-radius: 10px; padding: 10px 14px; margin-top: 12px; font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 16px; }
+  .card h2 { font-size: 16px; margin: 0 0 12px; }
+  .card h2 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .grid > .card { margin-top: 0; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kpi { background: var(--bg); border-radius: 10px; padding: 12px; }
+  .kpi .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .profile { display: flex; align-items: center; gap: 12px; }
+  .profile img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--bg); }
+  .profile a { color: var(--text); font-weight: 700; font-size: 18px; text-decoration: none; }
+  .profile p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 16px; }
+  .tab { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 14px; cursor: pointer; font-weight: 500; }
+  .tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td a { color: var(--text); }
+  .scroll { overflow-x: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: var(--accent-soft); color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+  .chip b { color: var(--accent); margin-left: 4px; font-weight: 600; }
+  .heat { min-width: 560px; display: grid; grid-template-columns: 28px repeat(24, 1fr); gap: 2px; font-size: 10px; }
+  .heat div { aspect-ratio: 1; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+  .heat .lbl { color: var(--muted); aspect-ratio: auto; }
+  .chart-box { position: relative; height: 240px; }
+  .insights li { margin: 6px 0; line-height: 1.5; font-size: 14px; }
+  .row-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .row-actions input { flex: 1 1 200px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+  .hidden { display: none; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 12px; }
+  .diag { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .diag > div { background: var(--bg); border-radius: 10px; padding: 12px; }
+  .diag .t { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+  .diag .d { color: var(--muted); font-size: 13px; margin-top: 6px; line-height: 1.5; }
+  .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+  .pill.good { background: var(--accent-soft); color: var(--accent); }
+  .pill.mid { background: var(--warn-soft); color: var(--warn); }
+  .pill.bad { background: #fde8e8; color: #c62828; }
+  @media (prefers-color-scheme: dark) { .pill.bad { background: #3a1714; color: #ff8a80; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>블로그 발행 분석기</h1>
+  <p class="sub">네이버 블로그 RSS로 발행 주기·카테고리·태그·제목 패턴을 분석합니다.</p>
+
+  <form id="f">
+    <input id="q" type="text" placeholder="블로그 ID 또는 주소 (쉼표로 최대 5개 비교) 예: naverofficial, blog.naver.com/blogpeople" />
+    <button type="submit">분석하기</button>
+  </form>
+  <div class="hint">blog.naver.com/<b>아이디</b> 의 아이디 부분을 입력하거나 블로그 주소를 그대로 붙여넣으세요.</div>
+  <div class="notice">RSS 특성상 <b>최근 공개 글 최대 50개</b>만 분석됩니다. 조회수·공감·댓글 수, 검색 순위, 본문 전체 글자 수는 RSS에 없어 분석할 수 없습니다.</div>
+  <div id="err" class="error hidden"></div>
+
+  <div id="compare" class="card hidden">
+    <h2>블로그 비교</h2>
+    <div class="scroll"><table id="cmpTable"></table></div>
+  </div>
+
+  <div id="tabs" class="tabs"></div>
+  <div id="result" class="hidden">
+    <div class="card">
+      <div class="profile" id="profile"></div>
+      <div class="kpis" id="kpis" style="margin-top:16px"></div>
+      <div class="meta" id="meta"></div>
+    </div>
+    <div class="card">
+      <h2>운영 진단 <small>이 도구가 정한 참고 기준이며, 노출·성과와의 관계는 검증되지 않았습니다</small></h2>
+      <div class="diag" id="diag"></div>
+    </div>
+    <div class="card">
+      <h2>자동 인사이트 <small>RSS 범위 내 데이터 기준</small></h2>
+      <ul class="insights" id="insights"></ul>
+    </div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card"><h2>주차별 발행 수</h2><div class="chart-box"><canvas id="cWeek"></canvas></div></div>
+      <div class="card"><h2>카테고리 분포</h2><div class="chart-box"><canvas id="cCat"></canvas></div></div>
+    </div>
+    <div class="card">
+      <h2>요일 × 시간대 발행 히트맵 <small>한국시간 기준</small></h2>
+      <div class="scroll"><div id="heat" class="heat"></div></div>
+    </div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card"><h2>태그 TOP 20</h2><div class="chips" id="tags"></div></div>
+      <div class="card"><h2>제목 키워드 TOP 20 <small>단순 어절 빈도</small></h2><div class="chips" id="words"></div></div>
+    </div>
+    <div class="card">
+      <div class="row-actions">
+        <h2 style="margin:0">게시물 목록</h2>
+        <input id="filter" type="text" placeholder="제목·태그·카테고리 검색" />
+        <button class="ghost" id="csv" type="button">CSV 다운로드</button>
+      </div>
+      <div class="scroll"><table id="posts"></table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+const STOP = new Set(['그리고','하는','있는','위한','대한','이번','에서','으로','하기','합니다','입니다','the','and','for','with']);
+let blogs = [];      // { data, stats }
+let current = 0;
+let charts = [];
+
+function parseIds(input) {
+  return [...new Set(input.split(/[,\s]+/).map((s) => {
+    s = s.trim(); if (!s) return '';
+    const q = s.match(/[?&]blogId=([\w-]+)/); if (q) return q[1];
+    const m = s.match(/blog\.naver\.com\/([\w-]+)/); if (m) return m[1];
+    return s.replace(/^@/, '');
+  }).filter(Boolean))].slice(0, 5);
+}
+
+// pubDate(ISO, UTC) → 한국시간 기준 요소
+function kst(iso) {
+  const d = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+  return { y: d.getUTCFullYear(), mo: d.getUTCMonth(), d: d.getUTCDate(), day: d.getUTCDay(), h: d.getUTCHours(), date: d };
+}
+const fmtDate = (iso) => { const k = kst(iso); return `${k.y}.${String(k.mo + 1).padStart(2, '0')}.${String(k.d).padStart(2, '0')} ${String(k.h).padStart(2, '0')}시`; };
+const countBy = (arr) => arr.reduce((m, k) => (m.set(k, (m.get(k) || 0) + 1), m), new Map());
+const topN = (map, n) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+const r1 = (n) => Math.round(n * 10) / 10;
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function analyze(data) {
+  const items = [...data.items].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const n = items.length;
+  const s = { n };
+  if (!n) return s;
+  const times = items.map((i) => new Date(i.pubDate).getTime());
+  const newest = times[0], oldest = times[n - 1];
+  s.spanDays = Math.max(1, (newest - oldest) / 864e5);
+  s.perWeek = n > 1 ? r1((n - 1) / s.spanDays * 7) : 0;
+  const gaps = times.slice(0, -1).map((t, i) => (t - times[i + 1]) / 864e5);
+  s.avgGap = gaps.length ? r1(gaps.reduce((a, b) => a + b, 0) / gaps.length) : 0;
+  s.maxGap = gaps.length ? r1(Math.max(...gaps)) : 0;
+  const sorted = [...gaps].sort((a, b) => a - b);
+  s.medGap = sorted.length ? r1(sorted[Math.floor(sorted.length / 2)]) : 0;
+  s.daysSinceLast = r1((Date.now() - newest) / 864e5);
+  s.last30 = times.filter((t) => Date.now() - t <= 30 * 864e5).length;
+  s.newest = items[0].pubDate; s.oldest = items[n - 1].pubDate;
+  s.cats = countBy(items.map((i) => i.category));
+  s.tags = countBy(items.flatMap((i) => i.tags));
+  s.avgTags = r1(items.reduce((a, i) => a + i.tags.length, 0) / n);
+  s.noTag = items.filter((i) => !i.tags.length).length;
+  s.thumbRate = Math.round(items.filter((i) => i.thumbnail).length / n * 100);
+  s.avgTitle = Math.round(items.reduce((a, i) => a + i.title.length, 0) / n);
+  s.words = countBy(items.flatMap((i) => i.title
+    .replace(/[\[\]()<>{}"'“”‘’.,!?~:;|/\\·…\-_+=#@*&%^]/g, ' ')
+    .split(/\s+/).map((w) => w.trim().toLowerCase())
+    .filter((w) => w.length >= 2 && !STOP.has(w) && !/^\d+$/.test(w))));
+  s.heat = Array.from({ length: 7 }, () => Array(24).fill(0));
+  items.forEach((i) => { const k = kst(i.pubDate); s.heat[k.day][k.h]++; });
+  const byDay = s.heat.map((r) => r.reduce((a, b) => a + b, 0));
+  const byHour = Array.from({ length: 24 }, (_, h) => s.heat.reduce((a, r) => a + r[h], 0));
+  s.topDayCnt = Math.max(...byDay); s.topDays = byDay.map((v, i) => v === s.topDayCnt ? i : -1).filter((i) => i >= 0);
+  s.topHourCnt = Math.max(...byHour); s.topHours = byHour.map((v, i) => v === s.topHourCnt ? i : -1).filter((i) => i >= 0);
+  // 주차별(월요일 시작) 발행 수
+  const weekKey = (iso) => { const k = kst(iso); const d = k.date; const dow = (d.getUTCDay() + 6) % 7;
+    const mon = new Date(Date.UTC(k.y, k.mo, k.d - dow)); return mon.toISOString().slice(0, 10); };
+  const wk = countBy(items.map((i) => weekKey(i.pubDate)));
+  const weeks = []; let w = new Date(weekKey(s.oldest) + 'T00:00:00Z'); const end = new Date(weekKey(s.newest) + 'T00:00:00Z');
+  while (w <= end) { const key = w.toISOString().slice(0, 10); weeks.push([key.slice(5).replace('-', '/'), wk.get(key) || 0]); w = new Date(w.getTime() + 7 * 864e5); }
+  s.weeks = weeks;
+  s.zeroWeeks = weeks.filter((x) => x[1] === 0).length;
+  s.items = items;
+  return s;
+}
+
+function diagnose(s) {
+  if (!s.n) return [];
+  const g = (v, good, mid, hi = true) => hi ? (v >= good ? 'good' : v >= mid ? 'mid' : 'bad') : (v <= good ? 'good' : v <= mid ? 'mid' : 'bad');
+  const zr = s.weeks.length ? s.zeroWeeks / s.weeks.length : 0;
+  const top1 = topN(s.cats, 1)[0];
+  return [
+    ['발행량', g(s.perWeek, 3, 1), `주 평균 ${s.perWeek}회`, '주 3회 이상 좋음 · 1회 이상 보통'],
+    ['꾸준함', g(zr, 0.1, 0.3, false), `글 없는 주 ${s.zeroWeeks}/${s.weeks.length}주 (${Math.round(zr * 100)}%)`, '빈 주 10% 이하 좋음 · 30% 이하 보통'],
+    ['최근 활동', g(s.daysSinceLast, 7, 14, false), `마지막 글 ${Math.round(s.daysSinceLast)}일 전`, '7일 이내 좋음 · 14일 이내 보통'],
+    ['태그 활용', g(s.avgTags, 5, 2), `글당 평균 ${s.avgTags}개, 태그 없는 글 ${s.noTag}개`, '평균 5개 이상 좋음 · 2개 이상 보통'],
+    ['주제 집중도', 'info', `최다 카테고리 '${top1[0]}' ${Math.round(top1[1] / s.n * 100)}%`, `카테고리 ${s.cats.size}개 사용 (좋고 나쁨 판단 안 함)`],
+  ];
+}
+
+function insights(s) {
+  const out = [];
+  if (!s.n) return ['RSS에 공개 글이 없습니다.'];
+  out.push(`최근 ${s.n}개 글이 약 ${Math.round(s.spanDays)}일에 걸쳐 발행됐어요. 주 평균 <b>${s.perWeek}회</b>, 발행 간격 중앙값은 <b>${s.medGap}일</b>입니다.`);
+  if (s.n >= 50) out.push('글이 50개로 꽉 찼습니다. RSS 상한이라 이보다 오래된 글은 분석에 들어가지 않았어요.');
+  if (s.zeroWeeks > 0) out.push(`분석 기간 ${s.weeks.length}주 중 <b>${s.zeroWeeks}주</b>는 글이 없었습니다. 가장 긴 공백은 ${s.maxGap}일이에요.`);
+  else out.push(`분석 기간 ${s.weeks.length}주 동안 매주 최소 1개 이상 발행했어요.`);
+  if (s.daysSinceLast > 14) out.push(`마지막 글이 <b>${Math.round(s.daysSinceLast)}일 전</b>입니다. 발행이 멈춘 상태일 수 있어요.`);
+  out.push(`가장 많이 올린 요일은 <b>${s.topDays.map((d) => DAYS[d] + '요일').join('·')}</b>(${s.topDays.length > 1 ? '각 ' : ''}${s.topDayCnt}개), 시간대는 <b>${s.topHours.map((h) => h + '시대').join('·')}</b>(${s.topHours.length > 1 ? '각 ' : ''}${s.topHourCnt}개)입니다.`);
+  const [c1] = topN(s.cats, 1);
+  if (c1) out.push(`<b>${esc(c1[0])}</b> 카테고리가 ${Math.round(c1[1] / s.n * 100)}%로 가장 많아요. 카테고리는 총 ${s.cats.size}개가 쓰였습니다.`);
+  out.push(`글당 태그는 평균 ${s.avgTags}개${s.noTag ? `, 태그 없는 글이 <b>${s.noTag}개</b>` : ''}입니다. 제목 평균 길이는 ${s.avgTitle}자예요.`);
+  return out;
+}
+
+function clearCharts() { charts.forEach((c) => c.destroy()); charts = []; }
+
+function render() {
+  const { data, stats: s } = blogs[current];
+  document.getElementById('result').classList.remove('hidden');
+  document.getElementById('profile').innerHTML = `
+    ${data.channel.image ? `<img src="${esc(data.channel.image)}" alt="" referrerpolicy="no-referrer">` : ''}
+    <div><a href="${esc(data.channel.link || 'https://blog.naver.com/' + data.blogId)}" target="_blank" rel="noopener">${esc(data.channel.title || data.blogId)}</a>
+    <p>${esc(data.blogId)} · ${esc(data.channel.description || '')}</p></div>`;
+  const k = [
+    [s.n, '분석된 글 수'], [s.perWeek ?? '-', '주 평균 발행'], [s.medGap != null ? s.medGap + '일' : '-', '발행 간격(중앙값)'],
+    [s.last30 ?? 0, '최근 30일 발행'], [s.daysSinceLast != null ? Math.round(s.daysSinceLast) + '일 전' : '-', '마지막 발행'],
+    [s.avgTags ?? '-', '글당 평균 태그'], [(s.thumbRate ?? 0) + '%', '대표 이미지 포함률'],
+  ];
+  document.getElementById('kpis').innerHTML = k.map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
+  document.getElementById('insights').innerHTML = insights(s).map((t) => `<li>${t}</li>`).join('');
+  const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
+  document.getElementById('diag').innerHTML = diagnose(s).map(([t, lv, v, c]) =>
+    `<div><div class="t">${t}<span class="pill ${lv === 'info' ? 'mid' : lv}">${L[lv]}</span></div><div class="d">${esc(v)}<br>${c}</div></div>`).join('');
+  document.getElementById('meta').textContent = s.n
+    ? `분석 시각 ${fmtDate(data.fetchedAt)} · 분석 범위 ${fmtDate(s.oldest).slice(0, 10)} ~ ${fmtDate(s.newest).slice(0, 10)} (최근 공개 글 ${s.n}개)` : '';
+
+  clearCharts();
+  if (!s.n) return;
+  const css = getComputedStyle(document.documentElement);
+  const accent = css.getPropertyValue('--accent').trim(), muted = css.getPropertyValue('--muted').trim(), line = css.getPropertyValue('--line').trim();
+  Chart.defaults.color = muted; Chart.defaults.borderColor = line;
+  charts.push(new Chart(document.getElementById('cWeek'), {
+    type: 'bar', data: { labels: s.weeks.map((w) => w[0]), datasets: [{ data: s.weeks.map((w) => w[1]), backgroundColor: accent, borderRadius: 4 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } },
+  }));
+  const cats = topN(s.cats, 10);
+  charts.push(new Chart(document.getElementById('cCat'), {
+    type: 'bar', data: { labels: cats.map((c) => c[0]), datasets: [{ data: cats.map((c) => c[1]), backgroundColor: accent, borderRadius: 4 }] },
+    options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } } },
+  }));
+
+  const max = Math.max(1, ...s.heat.flat());
+  let h = '<div class="lbl"></div>' + Array.from({ length: 24 }, (_, i) => `<div class="lbl">${i % 3 === 0 ? i : ''}</div>`).join('');
+  [1, 2, 3, 4, 5, 6, 0].forEach((d) => {
+    h += `<div class="lbl">${DAYS[d]}</div>` + s.heat[d].map((v, hr) => `<div title="${DAYS[d]} ${hr}시: ${v}개" style="background:${v ? `color-mix(in srgb, ${accent} ${20 + 80 * v / max}%, transparent)` : 'var(--bg)'};color:${v / max > .5 ? '#fff' : 'inherit'}">${v || ''}</div>`).join('');
+  });
+  document.getElementById('heat').innerHTML = h;
+
+  const chips = (arr) => arr.length ? arr.map(([w, c]) => `<span class="chip">${esc(w)}<b>${c}</b></span>`).join('') : '<span class="hint">데이터 없음</span>';
+  document.getElementById('tags').innerHTML = chips(topN(s.tags, 20));
+  document.getElementById('words').innerHTML = chips(topN(s.words, 20));
+  renderPosts();
+}
+
+function renderPosts() {
+  const s = blogs[current].stats;
+  const q = document.getElementById('filter').value.trim().toLowerCase();
+  const rows = (s.items || []).filter((i) => !q || (i.title + ' ' + i.tags.join(' ') + ' ' + i.category).toLowerCase().includes(q));
+  document.getElementById('posts').innerHTML = `<thead><tr><th>발행일</th><th>제목</th><th>카테고리</th><th class="num">태그</th></tr></thead><tbody>` +
+    rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num">${i.tags.length}</td></tr>`).join('') + '</tbody>';
+}
+
+function renderCompare() {
+  const box = document.getElementById('compare');
+  if (blogs.length < 2) return box.classList.add('hidden');
+  box.classList.remove('hidden');
+  const rows = [
+    ['분석된 글 수', (s) => s.n], ['주 평균 발행', (s) => s.perWeek], ['발행 간격 중앙값(일)', (s) => s.medGap],
+    ['최근 30일 발행', (s) => s.last30], ['마지막 발행(일 전)', (s) => Math.round(s.daysSinceLast)],
+    ['최장 공백(일)', (s) => s.maxGap], ['주력 요일', (s) => s.topDays.map((d) => DAYS[d]).join('·')], ['주력 시간대', (s) => s.topHours.map((h) => h + '시').join('·')],
+    ['카테고리 수', (s) => s.cats.size], ['글당 평균 태그', (s) => s.avgTags], ['제목 평균 길이(자)', (s) => s.avgTitle],
+  ];
+  document.getElementById('cmpTable').innerHTML = `<thead><tr><th></th>${blogs.map((b) => `<th class="num">${esc(b.data.channel.title || b.data.blogId)}</th>`).join('')}</tr></thead><tbody>` +
+    rows.map(([l, f]) => `<tr><td>${l}</td>${blogs.map((b) => `<td class="num">${b.stats.n ? f(b.stats) : '-'}</td>`).join('')}</tr>`).join('') + '</tbody>';
+}
+
+function renderTabs() {
+  const el = document.getElementById('tabs');
+  if (blogs.length < 2) { el.innerHTML = ''; return; }
+  el.innerHTML = blogs.map((b, i) => `<button type="button" class="tab ${i === current ? 'on' : ''}" data-i="${i}">${esc(b.data.channel.title || b.data.blogId)}</button>`).join('');
+  el.querySelectorAll('.tab').forEach((t) => t.onclick = () => { current = +t.dataset.i; renderTabs(); render(); });
+}
+
+document.getElementById('f').onsubmit = async (e) => {
+  e.preventDefault();
+  const ids = parseIds(document.getElementById('q').value);
+  const err = document.getElementById('err');
+  err.classList.add('hidden');
+  if (!ids.length) return;
+  const btn = document.querySelector('#f button'); btn.disabled = true; btn.textContent = '불러오는 중…';
+  const results = await Promise.all(ids.map((id) => fetch('/api/rss?id=' + encodeURIComponent(id))
+    .then(async (r) => ({ id, ok: r.ok, body: await r.json() })).catch(() => ({ id, ok: false, body: { error: '네트워크 오류' } }))));
+  btn.disabled = false; btn.textContent = '분석하기';
+  const fails = results.filter((r) => !r.ok);
+  if (fails.length) { err.innerHTML = fails.map((f) => `<b>${esc(f.id)}</b>: ${esc(f.body.error)}`).join('<br>'); err.classList.remove('hidden'); }
+  blogs = results.filter((r) => r.ok).map((r) => ({ data: r.body, stats: analyze(r.body) }));
+  current = 0;
+  history.replaceState(null, '', '?id=' + ids.join(','));
+  if (!blogs.length) { document.getElementById('result').classList.add('hidden'); document.getElementById('compare').classList.add('hidden'); renderTabs(); return; }
+  renderCompare(); renderTabs(); render();
+};
+
+document.getElementById('filter').oninput = renderPosts;
+document.getElementById('csv').onclick = () => {
+  const b = blogs[current]; if (!b) return;
+  const q = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+  const lines = [['발행일(KST)', '제목', '카테고리', '태그', '태그수', 'URL'].map(q).join(',')]
+    .concat(b.stats.items.map((i) => [fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link].map(q).join(',')));
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.data.blogId}_posts.csv`; a.click();
+};
+
+const init = new URLSearchParams(location.search).get('id');
+if (init) { document.getElementById('q').value = init; document.getElementById('f').requestSubmit(); }
+</script>
+</body>
+</html>

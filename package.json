@@ -1,0 +1,10 @@
+{
+  "name": "naver-blog-analyzer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "네이버 블로그 RSS 기반 발행 패턴 분석 도구",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" }
+}
