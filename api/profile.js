@@ -2,6 +2,7 @@
 // 네이버 모바일 블로그 화면이 쓰는 내부 주소에서 이웃 수, 방문자 수, 글별 공감·댓글 수를 가져온다.
 // 공식 API가 아니므로 네이버가 막거나 형식을 바꾸면 언제든 실패할 수 있다. 실패하면 화면은 이 값들 없이 동작한다.
 const { ID_RE } = require('./rss');
+const store = require('../lib/store');
 
 const BASE = 'https://m.blog.naver.com/api/blogs/';
 const cache = new Map();
@@ -64,6 +65,18 @@ module.exports = async function handler(req, res) {
     const data = await load(id);
     if (!data.profile && !data.posts.length) return send(502, { error: '네이버에서 블로그 정보를 가져오지 못했어요.', errors: data.errors });
     cache.set(id, { at: Date.now(), data });
+    // 분석한 블로그는 매일 누적 방문자 수를 저장할 목록에 넣는다 (저장소가 연결된 경우만)
+    if (data.profile && store.enabled) {
+      try {
+        await store.track(id);
+        const today = store.kstDate();
+        const saved = await store.totals(id);
+        // 처음 보는 블로그는 오늘 자정 시점 누적값(지금 누적 - 오늘 방문자)을 바로 기록해 둔다
+        if (saved[today] == null && data.profile.totalVisitors != null && data.profile.todayVisitors != null) {
+          await store.saveTotal(id, today, data.profile.totalVisitors - data.profile.todayVisitors);
+        }
+      } catch (_) { /* 저장 실패는 분석에 영향 주지 않음 */ }
+    }
     res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
     send(200, data);
   } catch (e) {

@@ -203,6 +203,15 @@
   @media (max-width: 640px) { .head .kpis, .expo-panel { padding-left: 18px; padding-right: 18px; } .head .meta { padding: 0 18px 16px; } }
   .unoff { font-size: 12px; color: var(--muted); }
 
+  /* 방문자 추이 */
+  .visit { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 28px; align-items: start; }
+  @media (max-width: 720px) { .visit { grid-template-columns: 1fr; } }
+  .vstat { border-top: 1px solid var(--rule); }
+  .vstat div { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
+  .vstat b { font-variant-numeric: tabular-nums; }
+  .visit .chart-box { height: 240px; }
+  .empty { color: var(--muted); font-size: 14px; max-width: 64ch; word-break: keep-all; }
+
   /* 첫 화면: 결과 미리보기 */
   #intro { margin-top: 56px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
   @media (max-width: 860px) { #intro { grid-template-columns: 1fr; gap: 20px; } }
@@ -256,6 +265,10 @@
       <div class="meta" id="cmpMeta"></div>
     </div>
     <div class="card">
+      <h2>방문자 추이 <small>블로그별 날짜별 방문자 수예요. 값이 없는 날은 비워 둡니다.</small></h2>
+      <div id="cmpVisit"></div>
+    </div>
+    <div class="card">
       <h2>주차별 발행 추이 <small id="cmpWeekNote">모든 블로그의 데이터가 있는 기간만 비교합니다</small></h2>
       <div class="legend" id="cmpLegend"></div>
       <div class="chart-box" style="height:280px"><canvas id="cmpWeek" aria-label="블로그별 주차별 발행 수 선 차트"></canvas></div>
@@ -287,6 +300,10 @@
     <div class="card" id="expoCard">
       <h2>제목 노출 <small>최근 글 30개 제목을 블로그 검색에 넣어 내 글이 나오는지 확인합니다 (네이버 검색 API 기준)</small></h2>
       <div id="expo"></div>
+    </div>
+    <div class="card">
+      <h2>방문자 추이 <small id="visitNote">날짜별 방문자 수예요.</small></h2>
+      <div id="visit"></div>
     </div>
     <div class="card">
       <h2>운영 진단 <small>이 도구가 정한 참고 기준이며, 노출·성과와의 관계는 검증되지 않았습니다</small></h2>
@@ -521,6 +538,7 @@ function render() {
   renderMast(document.getElementById('mast'), blogs[current]);
   renderKpis(blogs[current]);
   loadProfile(blogs[current]);
+  renderVisit(blogs[current]); loadVisitors(blogs[current]);
   document.getElementById('insights').innerHTML = insights(s).map((t) => `<li>${t}</li>`).join('');
   renderExpo(); if (blogs[current].role === 'me') loadExposure(blogs[current]);
   const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
@@ -574,6 +592,80 @@ const roleTag = (b) => b.role ? `<span class="role ${b.role === 'me' ? 'me' : ''
 const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
 const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
 
+// ---- 방문자 추이 (비공식) ----
+async function loadVisitors(b) {
+  if (b.vis) return;
+  b.vis = { status: 'loading' };
+  try { const r = await fetch('/api/visitors?id=' + encodeURIComponent(b.data.blogId)); const body = await r.json(); b.vis = r.ok ? { status: 'ok', data: body } : { status: 'error' }; }
+  catch (_) { b.vis = { status: 'error' }; }
+  if (!blogs.includes(b)) return;
+  if (blogs.length === 1) renderVisit(b); else renderCmpVisit();
+}
+// 저장 기록·위젯 값에 오늘 지금까지 값(프로필)을 더한 날짜별 목록
+function visitDays(b) {
+  if (!b.vis || b.vis.status !== 'ok') return [];
+  const days = b.vis.data.days.map((d) => ({ ...d }));
+  const pr = b.prof && b.prof.status === 'ok' && b.prof.data.profile;
+  const today = new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10);
+  const t = days.find((d) => d.date === today);
+  if (pr && pr.todayVisitors != null) { if (t) { t.count = pr.todayVisitors; t.partial = true; } else days.push({ date: today, count: pr.todayVisitors, partial: true }); }
+  return days.sort((x, y) => x.date.localeCompare(y.date)).slice(-30);
+}
+let visitChart = null;
+function renderVisit(b) {
+  const el = document.getElementById('visit'); if (!el) return;
+  if (!b.vis || b.vis.status === 'loading') { el.innerHTML = '<p class="empty">방문자 수를 불러오고 있어요.</p>'; return; }
+  const days = visitDays(b), v = b.vis.data || {};
+  const full = days.filter((d) => !d.partial);
+  document.getElementById('visitNote').textContent = v.widget ? '블로그에 공개된 방문자 위젯 값과, 매일 저장한 누적 방문자 수의 차이로 계산했어요.' : '매일 저장한 누적 방문자 수의 차이로 계산했어요.';
+  if (days.length < 2) {
+    el.innerHTML = `<p class="empty">${v.storage
+      ? '이 블로그는 방문자 위젯을 공개하지 않아서, 오늘부터 매일 누적 방문자 수를 기록해요. 내일부터 하루씩 그래프가 채워집니다.'
+      : '이 블로그는 방문자 위젯을 공개하지 않아서 날짜별 값을 바로 가져올 수 없어요. 매일 기록을 쌓는 저장소를 연결하면 다음 날부터 그래프가 생깁니다.'}</p>`;
+    return;
+  }
+  const max = full.length ? full.reduce((a, d) => (d.count > a.count ? d : a)) : null, min = full.length ? full.reduce((a, d) => (d.count < a.count ? d : a)) : null;
+  const avg = full.length ? Math.round(full.reduce((a, d) => a + d.count, 0) / full.length) : null;
+  const today = days.find((d) => d.partial);
+  const md = (d) => d.date.slice(5).replace('-', '.');
+  el.innerHTML = `<div class="visit"><div><div class="hint" style="margin-bottom:8px">최근 ${days.length}일</div><div class="vstat">
+    ${max ? `<div><span>최고 (${md(max)})</span><b>${fmtN(max.count)}명</b></div>` : ''}${min ? `<div><span>최저 (${md(min)})</span><b>${fmtN(min.count)}명</b></div>` : ''}
+    ${avg != null ? `<div><span>하루 평균</span><b>${fmtN(avg)}명</b></div>` : ''}${today ? `<div><span>오늘 지금까지</span><b>${fmtN(today.count)}명</b></div>` : ''}</div>
+    <p class="hint" style="margin-top:10px">오늘 값은 자정까지 계속 늘어나요.</p></div>
+    <div class="chart-box"><canvas id="cVisit" aria-label="날짜별 방문자 수 선 차트"></canvas></div></div>`;
+  if (visitChart) visitChart.destroy();
+  const c = colorOf(blogs.indexOf(b));
+  visitChart = new Chart(document.getElementById('cVisit'), {
+    type: 'line',
+    data: { labels: days.map(md), datasets: [{ data: days.map((d) => d.count), borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0,
+      pointRadius: days.map((d) => (d.partial ? 4 : 2)), pointBackgroundColor: days.map((d) => (d.partial ? css('--surface') : c)),
+      segment: { borderDash: (ctx) => (days[ctx.p1DataIndex] && days[ctx.p1DataIndex].partial ? [4, 4] : undefined) } }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (x) => `${fmtN(x.raw)}명${days[x.dataIndex].partial ? ' (집계 중)' : ''}` } } },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => fmtN(v) } }, x: { grid: { display: false } } } },
+  });
+}
+let cmpVisitChart = null;
+function renderCmpVisit() {
+  const el = document.getElementById('cmpVisit'); if (!el) return;
+  const per = blogs.map((b) => ({ b, days: visitDays(b) }));
+  if (blogs.some((b) => !b.vis || b.vis.status === 'loading')) { el.innerHTML = '<p class="empty">방문자 수를 불러오고 있어요.</p>'; return; }
+  const withData = per.filter((x) => x.days.length >= 2);
+  const missing = per.filter((x) => x.days.length < 2).map((x) => ({ name: nameOf(x.b), storage: x.b.vis && x.b.vis.data && x.b.vis.data.storage }));
+  if (!withData.length) { el.innerHTML = `<p class="empty">아직 날짜별 방문자 수가 있는 블로그가 없어요. 방문자 위젯을 공개하지 않은 블로그는 오늘부터 매일 기록해서, 내일부터 그래프가 채워집니다.</p>`; return; }
+  const dates = [...new Set(withData.flatMap((x) => x.days.map((d) => d.date)))].sort();
+  el.innerHTML = `<div class="legend">${withData.map((x) => `<span>${dotOf(blogs.indexOf(x.b))}${esc(nameOf(x.b))}</span>`).join('')}</div>
+    <div class="chart-box" style="height:260px"><canvas id="cCmpVisit" aria-label="블로그별 날짜별 방문자 수 선 차트"></canvas></div>
+    ${missing.length ? `<p class="hint" style="margin-top:10px">${missing.map((m) => esc(m.name)).join(', ')}: 방문자 위젯이 비공개예요. ${missing[0].storage ? '오늘부터 매일 기록해서 내일부터 그래프에 나타납니다.' : '매일 기록하는 저장소를 연결하면 다음 날부터 그래프에 나타납니다.'}</p>` : ''}`;
+  if (cmpVisitChart) cmpVisitChart.destroy();
+  cmpVisitChart = new Chart(document.getElementById('cCmpVisit'), {
+    type: 'line',
+    data: { labels: dates.map((d) => d.slice(5).replace('-', '.')), datasets: withData.map((x) => { const m = new Map(x.days.map((d) => [d.date, d.count])); const c = colorOf(blogs.indexOf(x.b));
+      return { label: nameOf(x.b), data: dates.map((d) => m.has(d) ? m.get(d) : null), borderColor: c, backgroundColor: c, borderWidth: 2, pointRadius: 2, tension: 0, spanGaps: false }; }) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${fmtN(x.raw)}명` } } },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => fmtN(v) } }, x: { grid: { display: false } } } },
+  });
+}
+
 // ---- 프로필·반응 (비공식) ----
 const fmtN = (v) => v == null ? '-' : v.toLocaleString('ko-KR');
 async function loadProfile(b) {
@@ -585,8 +677,8 @@ async function loadProfile(b) {
     b.prof = r.ok ? { status: 'ok', data: body, map: new Map((body.posts || []).map((x) => [x.logNo, x])) } : { status: 'error' };
   } catch (_) { b.prof = { status: 'error' }; }
   if (!blogs.includes(b)) return;
-  if (blogs.length === 1) { renderMast(document.getElementById('mast'), b); renderKpis(b); renderPosts(); }
-  else { renderCompare(true); renderCmpPosts(); }
+  if (blogs.length === 1) { renderMast(document.getElementById('mast'), b); renderKpis(b); renderPosts(); if (b.vis && b.vis.status === 'ok') renderVisit(b); }
+  else { renderCompare(true); renderCmpPosts(); if (blogs.every((x) => x.vis && x.vis.status !== 'loading')) renderCmpVisit(); }
 }
 const logNoOfItem = (it) => (it.link.match(/\/(\d{9,})/) || [])[1];
 const reactOf = (b, it) => (b.prof && b.prof.map ? b.prof.map.get(logNoOfItem(it)) : null);
@@ -695,7 +787,8 @@ function renderCompare(tableOnly) {
   document.getElementById('cmpTable').innerHTML = head + '<tbody>' + body + '</tbody>';
   renderCmpExpo();
   if (tableOnly) return;
-  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); });
+  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); });
+  renderCmpVisit();
   document.getElementById('cmpMeta').innerHTML = blogs.map((b) => b.stats.n
     ? `${esc(nameOf(b))}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${esc(nameOf(b))}: 공개 글 없음`).join('<br>') + `<br>${fmtDate(blogs[0].data.fetchedAt)}에 분석`;
 

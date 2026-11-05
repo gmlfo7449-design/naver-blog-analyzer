@@ -3,10 +3,12 @@
     "api/exposure.js": { "maxDuration": 30 },
     "api/rss.js": { "maxDuration": 15 },
     "api/profile.js": { "maxDuration": 15 },
-    "api/visitors.js": { "maxDuration": 15 }
+    "api/visitors.js": { "maxDuration": 15 },
+    "api/cron-snapshot.js": { "maxDuration": 60 }
   },
   "headers": [
     { "source": "/", "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }] },
     { "source": "/index.html", "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }] }
-  ]
+  ],
+  "crons": [{ "path": "/api/cron-snapshot", "schedule": "10 15 * * *" }]
 }
