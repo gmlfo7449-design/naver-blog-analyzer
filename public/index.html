@@ -124,7 +124,7 @@
     <button type="submit">분석하기</button>
   </form>
   <div class="hint">blog.naver.com/<b>아이디</b> 의 아이디 부분을 입력하거나 블로그 주소를 그대로 붙여넣으세요.</div>
-  <div class="notice">RSS 특성상 <b>최근 공개 글 최대 50개</b>만 분석됩니다. 조회수·공감·댓글 수, 검색 순위, 본문 전체 글자 수는 RSS에 없어 분석할 수 없습니다.</div>
+  <div class="notice"><b>최근 공개 글 30개</b>를 기준으로 분석합니다. 조회수·공감·댓글 수, 검색 순위, 본문 전체 글자 수는 RSS에 없어 분석할 수 없습니다.</div>
   <div id="err" class="error hidden"></div>
 
   <div id="cmpView" class="hidden">
@@ -198,6 +198,7 @@
 </div>
 
 <script>
+const POST_LIMIT = 30; // 보고서는 최근 글 30개 기준 (제목 노출 확인과 같은 범위)
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const STOP = new Set(['그리고','하는','있는','위한','대한','이번','에서','으로','하기','합니다','입니다','the','and','for','with']);
 let blogs = [];      // { data, stats }
@@ -225,7 +226,7 @@ const r1 = (n) => Math.round(n * 10) / 10;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function analyze(data) {
-  const items = [...data.items].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+  const items = [...data.items].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, POST_LIMIT);
   const n = items.length;
   const s = { n };
   if (!n) return s;
@@ -277,22 +278,53 @@ function expoSummary(e) {
   e.results.forEach((x) => c[x.status]++);
   return { ...c, n: e.results.length - c.error };
 }
-async function loadExposure(b) {
-  if (b.expo) return;
-  b.expo = { status: 'loading' };
-  try {
-    const r = await fetch('/api/exposure?v=4&id=' + encodeURIComponent(b.data.blogId));
-    const body = await r.json();
-    b.expo = r.ok ? { status: 'ok', data: body, map: new Map(body.results.map((x) => [x.logNo, x])) }
-      : { status: body.code === 'no_key' ? 'nokey' : 'error', message: body.error };
-  } catch (_) { b.expo = { status: 'error', message: '네트워크 오류로 확인하지 못했어요.' }; }
-  if (blogs.includes(b)) { if (blogs.length === 1) { renderExpo(); renderPosts(); } else renderCompare(true); }
+const EXPO_BATCH = 6;
+function expoRefresh(b) {
+  if (!blogs.includes(b)) return;
+  if (blogs.length === 1) { renderExpo(); renderPosts(); } else renderCompare(true);
+}
+async function fetchExpoBatch(id, offset) {
+  for (let t = 0; t < 3; t++) {          // 요청 자체가 실패하면 2번 더 시도
+    try {
+      const r = await fetch(`/api/exposure?v=5&id=${encodeURIComponent(id)}&offset=${offset}&limit=${EXPO_BATCH}${t ? '&retry=' + Date.now() : ''}`);
+      const body = await r.json();
+      if (r.ok) return { ok: true, body };
+      if (body.code === 'no_key' || r.status === 400 || r.status === 404) return { ok: false, fatal: true, body };
+    } catch (_) { /* 네트워크 오류 → 재시도 */ }
+    await new Promise((res) => setTimeout(res, 800 * (t + 1)));
+  }
+  return { ok: false };
+}
+async function loadExposure(b, force) {
+  if (b.expo && !force) return;
+  const total = Math.min(POST_LIMIT, b.stats.n || 0);
+  const prev = force && b.expo && b.expo.data ? b.expo.data.results : [];
+  b.expo = { status: 'loading', done: 0, total, data: { results: [], display: 30, pendingHours: 48 }, map: new Map() };
+  expoRefresh(b);
+  for (let off = 0; off < total; off += EXPO_BATCH) {
+    // 다시 확인일 때는 이미 성공한 구간은 건너뛴다
+    const keep = prev.slice(off, off + EXPO_BATCH);
+    let rows;
+    if (keep.length && keep.every((x) => !x.error)) rows = keep;
+    else {
+      const r = await fetchExpoBatch(b.data.blogId, off);
+      if (r.fatal) { b.expo = { status: r.body.code === 'no_key' ? 'nokey' : 'error', message: r.body.error }; expoRefresh(b); return; }
+      if (r.ok) { rows = r.body.results; Object.assign(b.expo.data, { checkedAt: r.body.checkedAt, display: r.body.display, pendingHours: r.body.pendingHours }); }
+      else rows = b.stats.items.slice(off, off + EXPO_BATCH).map((it) => ({ logNo: (it.link.match(/\/(\d{9,})/) || [])[1], title: it.title, pubDate: it.pubDate, status: 'error', error: '연결 실패' }));
+    }
+    rows.forEach((x) => { b.expo.data.results.push(x); b.expo.map.set(x.logNo, x); });
+    b.expo.done = b.expo.data.results.length;
+    expoRefresh(b);
+  }
+  b.expo.status = 'ok';
+  b.expo.data.checkedAt = b.expo.data.checkedAt || new Date().toISOString();
+  expoRefresh(b);
 }
 function expoRankCell(b, item) {
-  if (!b.expo || b.expo.status !== 'ok') return '';
+  if (!b.expo || !b.expo.map) return '';
   const logNo = (item.link.match(/\/(\d{9,})/) || [])[1];
   const x = b.expo.map.get(logNo);
-  if (!x) return '<span class="hint">-</span>';
+  if (!x) return b.expo.status === 'loading' ? '<span class="hint">확인 중…</span>' : '<span class="hint">-</span>';
   const badge = `<span class="rk ${stCls(x)}" title="${x.rank ? '검색 ' + x.rank + '위' : ''}">${ST[x.status]}${x.rank ? ` <small>${x.rank}위</small>` : ''}</span>`;
   return x.status === 'shown' ? badge : `${badge} <a class="verify" href="${naverBlogSearch(item.title)}" target="_blank" rel="noopener" title="네이버 블로그 탭에서 이 제목을 검색해 직접 확인">직접 확인</a>`;
 }
@@ -300,16 +332,23 @@ const naverBlogSearch = (title) => 'https://search.naver.com/search.naver?ssc=ta
 function renderExpo() {
   const b = blogs[current], el = document.getElementById('expo'); if (!b) return;
   const e = b.expo;
-  if (!e || e.status === 'loading') { el.innerHTML = '<p class="hint">최근 글 제목을 하나씩 검색하는 중이에요. 10초 정도 걸려요.</p>'; return; }
-  if (e.status !== 'ok') { el.innerHTML = `<p class="hint">${esc(e.message || '확인하지 못했어요.')}</p>`; return; }
+  if (!e) { el.innerHTML = '<p class="hint">확인을 준비하고 있어요.</p>'; return; }
+  if (e.status !== 'ok' && e.status !== 'loading') { el.innerHTML = `<p class="hint">${esc(e.message || '확인하지 못했어요.')}</p>`; return; }
   const s = expoSummary(e.data);
-  el.innerHTML = `<div class="expo"><div><div class="hint">노출</div><div class="big">${s.shown}<small>/${s.n}건</small></div>
+  const loading = e.status === 'loading';
+  const head = loading ? `<div class="hint" style="margin-bottom:10px">최근 글 제목을 검색하는 중이에요 · <b>${e.done}/${e.total}</b>개 확인</div>` : '';
+  const retry = !loading && s.error ? `<button class="ghost" type="button" id="expoRetry" style="margin-top:10px;padding:6px 12px;font-size:13px">확인 실패 ${s.error}개 다시 확인</button>` : '';
+  el.innerHTML = head + `<div class="expo"><div><div class="hint">노출</div><div class="big">${s.shown}<small>/${s.n}건</small></div>
     <div class="hint" style="margin-top:6px">노출 ${s.shown} · 미반영 ${s.pending} · 누락 ${s.missing}${s.error ? ` · 확인 실패 ${s.error}` : ''}</div>
-    <div class="hint" style="margin-top:6px">확인 시각 ${fmtDate(e.data.checkedAt)}</div></div>
-    <div><div class="sq">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)} · ${ST[x.status]}${x.rank ? ' ' + x.rank + '위' : ''}"></span>`).join('')}</div>
+    ${e.data.checkedAt ? `<div class="hint" style="margin-top:6px">확인 시각 ${fmtDate(e.data.checkedAt)}</div>` : ''}${retry}</div>
+    <div><div class="sq">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)} · ${ST[x.status]}${x.rank ? ' ' + x.rank + '위' : ''}"></span>`).join('')}${'<span></span>'.repeat(Math.max(0, (e.total || 0) - e.data.results.length))}</div>
     <div class="lg"><span><i class="shown"></i>노출: 검색 ${e.data.display}위 안</span><span><i class="pending"></i>미반영: ${e.data.display}위 밖, 발행 ${e.data.pendingHours}시간 이내</span><span><i class="missing"></i>누락: ${e.data.display}위 밖, 발행 ${e.data.pendingHours}시간 지남</span></div>
     <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. <b>노출은 확실하지만, 미반영·누락은 검색 API에서 못 찾았다는 뜻일 뿐이에요.</b> 검색 API는 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 아래 게시물 목록의 '직접 확인'으로 실제 화면을 확인해 주세요.</p></div></div>`;
 }
+
+document.addEventListener('click', (ev) => {
+  if (ev.target && ev.target.id === 'expoRetry') { const b = blogs[current]; if (b) loadExposure(b, true); }
+});
 
 function diagnose(s) {
   if (!s.n) return [];
@@ -329,7 +368,7 @@ function insights(s) {
   const out = [];
   if (!s.n) return ['RSS에 공개 글이 없습니다.'];
   out.push(`최근 ${s.n}개 글이 약 ${Math.round(s.spanDays)}일에 걸쳐 발행됐어요. 주 평균 <b>${s.perWeek}회</b>, 발행 간격 중앙값은 <b>${s.medGap}일</b>입니다.`);
-  if (s.n >= 50) out.push('글이 50개로 꽉 찼습니다. RSS 상한이라 이보다 오래된 글은 분석에 들어가지 않았어요.');
+  if (s.n >= POST_LIMIT) out.push(`최근 글 ${POST_LIMIT}개 기준이에요. 이보다 오래된 글은 분석에 넣지 않았어요.`);
   if (s.zeroWeeks > 0) out.push(`분석 기간 ${s.weeks.length}주 중 <b>${s.zeroWeeks}주</b>는 글이 없었습니다. 가장 긴 공백은 ${s.maxGap}일이에요.`);
   else out.push(`분석 기간 ${s.weeks.length}주 동안 매주 최소 1개 이상 발행했어요.`);
   if (s.daysSinceLast > 14) out.push(`마지막 글이 <b>${Math.round(s.daysSinceLast)}일 전</b>입니다. 발행이 멈춘 상태일 수 있어요.`);
@@ -435,10 +474,10 @@ function renderCompare(tableOnly) {
   const body = rows.map(([label, f, dir]) => {
     if (label === 'sec') return `<tr class="sec"><td colspan="${blogs.length + 1}">${f}</td></tr>`;
     if (typeof f === 'string') {
-      const vals = blogs.map((b) => { const e = b.expo; if (!e || e.status === 'loading') return null; if (e.status !== 'ok') return -1; const sm = expoSummary(e.data); return { v: sm[f], n: sm.n }; });
-      const nums = vals.filter((v) => v && v !== -1).map((v) => v.v);
+      const vals = blogs.map((b) => { const e = b.expo; if (!e) return null; if (e.status === 'loading') return { loading: `${e.done}/${e.total}` }; if (e.status !== 'ok') return -1; const sm = expoSummary(e.data); return { v: sm[f], n: sm.n }; });
+      const nums = vals.filter((v) => v && v !== -1 && !v.loading).map((v) => v.v);
       const best = f === 'pending' || new Set(nums).size < 2 ? null : f === 'shown' ? Math.max(...nums) : Math.min(...nums);
-      return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${v && v !== -1 && v.v === best ? ' best' : ''}">${v === null ? '<span class="hint">확인 중…</span>' : v === -1 ? '<span class="hint">-</span>' : `${v.v}/${v.n}`}</td>`).join('')}</tr>`;
+      return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${v && v !== -1 && !v.loading && v.v === best ? ' best' : ''}">${v === null ? '<span class="hint">확인 중…</span>' : v.loading ? `<span class="hint">확인 중 ${v.loading}</span>` : v === -1 ? '<span class="hint">-</span>' : `${v.v}/${v.n}`}</td>`).join('')}</tr>`;
     }
     const vals = blogs.map((b) => (b.stats.n ? f(b.stats) : null));
     let best = null;

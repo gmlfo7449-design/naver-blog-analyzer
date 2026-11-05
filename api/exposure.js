@@ -7,20 +7,35 @@ const API = 'https://naverapihub.apigw.ntruss.com/search/v1/blog';
 const MAX_POSTS = 30;      // 최근 글 몇 개를 볼지 (글 1개 = API 1회)
 const DISPLAY = 30;        // 검색 결과 상위 몇 개까지 볼지 (30위 안 = 노출)
 const PENDING_HOURS = 48;  // 발행 후 이 시간 안이면 '미반영'으로 본다
-const CONCURRENCY = 5;
+const CONCURRENCY = 3;
+const BATCH_MAX = 10;      // 한 번 요청에 확인할 최대 글 수 (함수 시간 제한을 넘지 않게)
 const cache = new Map();
 const TTL_MS = 60 * 60 * 1000;
-const VERSION = 4; // 판정 방식이 바뀌면 올려서 CDN 캐시를 무효화
+const VERSION = 5; // 판정 방식이 바뀌면 올려서 CDN 캐시를 무효화
 
 const logNoOf = (url) => (String(url).match(/\/(\d{9,})(?:[/?#]|$)/) || [])[1] || (String(url).match(/logNo=(\d+)/) || [])[1] || '';
 
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// 일시적 오류(429·5xx·네트워크)는 최대 3번까지 간격을 늘려 다시 시도한다
+async function callApi(url, headers) {
+  let last;
+  for (let i = 0; i < 4; i++) {
+    try {
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(6000) });
+      if (res.status !== 429 && res.status < 500) return res;
+      last = res;
+    } catch (e) { last = e; }
+    await wait(400 * 2 ** i);
+  }
+  if (last && last.status) return last;
+  throw Object.assign(new Error('검색 API에 연결하지 못했어요.'), { status: 502 });
+}
+
 async function searchRank(title, blogId, logNo, sort = 'sim', display = DISPLAY) {
   const q = new URLSearchParams({ query: title, display: String(display), start: '1', sort });
-  const res = await fetch(`${API}?${q}`, {
-    headers: { 'X-NCP-APIGW-API-KEY-ID': process.env.NAVER_CLIENT_ID, 'X-NCP-APIGW-API-KEY': process.env.NAVER_CLIENT_SECRET },
-  });
+  const res = await callApi(`${API}?${q}`, { 'X-NCP-APIGW-API-KEY-ID': process.env.NAVER_CLIENT_ID, 'X-NCP-APIGW-API-KEY': process.env.NAVER_CLIENT_SECRET });
   if (res.status === 401 || res.status === 403) throw Object.assign(new Error('검색 API 인증에 실패했어요. Vercel 환경변수의 키 값을 확인해 주세요.'), { status: 502, fatal: true });
-  if (res.status === 429) throw Object.assign(new Error('검색 API 호출 한도를 넘었어요. 잠시 뒤 다시 시도해 주세요.'), { status: 429, fatal: true });
+  if (res.status === 429) return { rank: null, error: '호출 한도 초과' };
   if (!res.ok) return { rank: null, error: `API 오류 ${res.status}` };
   const body = await res.json();
   const items = body.items || [];
@@ -45,11 +60,14 @@ module.exports = async function handler(req, res) {
     return send(503, { error: '검색 API 키가 아직 설정되지 않았어요.', code: 'no_key' });
   }
   const key = id + ':' + VERSION;
-  const hit = cache.get(key);
+  const offset = Math.max(0, Math.min(MAX_POSTS - 1, parseInt(req.query.offset, 10) || 0));
+  const limit = Math.max(1, Math.min(BATCH_MAX, parseInt(req.query.limit, 10) || BATCH_MAX, MAX_POSTS - offset));
+  const hit = cache.get(key + ':' + offset + ':' + limit);
   if (hit && Date.now() - hit.at < TTL_MS) return send(200, hit.data);
   try {
     const blog = await getBlog(id);
-    const posts = [...blog.items].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, MAX_POSTS);
+    const all = [...blog.items].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, MAX_POSTS);
+    const posts = all.slice(offset, offset + limit);
     const results = await pool(posts, CONCURRENCY, async (p) => {
       const logNo = logNoOf(p.link);
       // 제목을 큰따옴표로 감싸 '정확히 일치' 검색을 한다 (안쪽 큰따옴표는 지움)
@@ -63,9 +81,11 @@ module.exports = async function handler(req, res) {
       const status = r.error ? 'error' : r.indexed ? 'shown' : ageH < PENDING_HOURS ? 'pending' : 'missing';
       return { logNo, title: p.title, pubDate: p.pubDate, status, ...r };
     });
-    const data = { version: VERSION, blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, pendingHours: PENDING_HOURS, results };
-    cache.set(key, { at: Date.now(), data });
-    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=21600');
+    const data = { version: VERSION, blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, pendingHours: PENDING_HOURS,
+      offset, limit, total: all.length, results };
+    // 확인 실패가 섞인 결과는 캐시하지 않는다 (다시 확인하면 새로 검색)
+    if (!results.some((x) => x.error)) cache.set(key + ':' + offset + ':' + limit, { at: Date.now(), data });
+    res.setHeader('Cache-Control', results.some((x) => x.error) ? 'no-store' : 's-maxage=3600, stale-while-revalidate=21600');
     send(200, data);
   } catch (e) {
     send(e.status || 500, { error: e.message || '알 수 없는 오류' });
