@@ -1,0 +1,72 @@
+// 블로그 프로필·글별 반응 (비공식)
+// 네이버 모바일 블로그 화면이 쓰는 내부 주소에서 이웃 수, 방문자 수, 글별 공감·댓글 수를 가져온다.
+// 공식 API가 아니므로 네이버가 막거나 형식을 바꾸면 언제든 실패할 수 있다. 실패하면 화면은 이 값들 없이 동작한다.
+const { ID_RE } = require('./rss');
+
+const BASE = 'https://m.blog.naver.com/api/blogs/';
+const cache = new Map();
+const TTL_MS = 30 * 60 * 1000;
+
+async function getJson(url, blogId) {
+  const res = await fetch(url, {
+    headers: { Accept: 'application/json', Referer: `https://m.blog.naver.com/${blogId}` },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) throw Object.assign(new Error(`네이버 응답 ${res.status}`), { status: res.status });
+  const body = await res.json();
+  if (!body || body.isSuccess === false) throw new Error('네이버가 빈 응답을 보냈어요.');
+  return body.result || {};
+}
+
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+async function load(id) {
+  const [info, list] = await Promise.allSettled([
+    getJson(`${BASE}${id}`, id),
+    getJson(`${BASE}${id}/post-list?categoryNo=0&itemCount=30&page=1`, id),
+  ]);
+  const out = { blogId: id, fetchedAt: new Date().toISOString(), profile: null, posts: [], errors: [] };
+  if (info.status === 'fulfilled') {
+    const r = info.value;
+    out.profile = {
+      nickName: r.nickName || '',
+      blogName: r.blogName || '',
+      neighbors: num(r.subscriberCount),
+      totalVisitors: num(r.totalVisitorCount),
+      todayVisitors: num(r.dayVisitorCount),
+      officialBlog: !!r.officialBlog,
+      powerBlog: !!r.powerBlog,
+      naverMate: !!r.isNaverMateBlog,
+      coverImage: (r.mobileTitleImage && (r.mobileTitleImage.croppedImage || r.mobileTitleImage.originalImage)) || '',
+      profileImage: r.profileImagePath || '',
+    };
+  } else out.errors.push('profile');
+  if (list.status === 'fulfilled') {
+    out.posts = (list.value.items || []).map((p) => ({
+      logNo: String(p.logNo || ''),
+      comments: num(p.commentCnt),
+      likes: num(p.sympathyCnt),
+      images: num(p.thumbnailCount),
+      shares: num(p.shareCnt),
+    })).filter((p) => p.logNo);
+  } else out.errors.push('posts');
+  return out;
+}
+
+module.exports = async function handler(req, res) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  const send = (code, obj) => { res.statusCode = code; res.end(JSON.stringify(obj)); };
+  const id = String((req.query && req.query.id) || '').trim();
+  if (!ID_RE.test(id)) return send(400, { error: '블로그 ID 형식이 올바르지 않습니다.' });
+  const hit = cache.get(id);
+  if (hit && Date.now() - hit.at < TTL_MS) return send(200, hit.data);
+  try {
+    const data = await load(id);
+    if (!data.profile && !data.posts.length) return send(502, { error: '네이버에서 블로그 정보를 가져오지 못했어요.', errors: data.errors });
+    cache.set(id, { at: Date.now(), data });
+    res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
+    send(200, data);
+  } catch (e) {
+    send(500, { error: e.message || '알 수 없는 오류' });
+  }
+};

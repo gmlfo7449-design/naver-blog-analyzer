@@ -1,7 +1,8 @@
 {
   "functions": {
     "api/exposure.js": { "maxDuration": 30 },
-    "api/rss.js": { "maxDuration": 15 }
+    "api/rss.js": { "maxDuration": 15 },
+    "api/profile.js": { "maxDuration": 15 }
   },
   "headers": [
     { "source": "/", "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }] },
