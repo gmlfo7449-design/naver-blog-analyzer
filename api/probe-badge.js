@@ -1,15 +1,12 @@
-// 임시 확인용 (확인 후 삭제): 인플루언서 홈(in.naver.com) 존재 여부
+// 임시 확인용 (확인 후 삭제): 11월 메이트 발표 글에서 블로그 몇 개를 뽑아 메이트 여부 확인
 module.exports = async function handler(req, res) {
-  const id = String(req.query.id || '').replace(/[^\w-]/g, '');
-  const out = [];
-  for (const u of [`https://in.naver.com/${id}`, `https://in.naver.com/${id}/contents`]) {
-    try {
-      const r = await fetch(u, { redirect: 'manual', signal: AbortSignal.timeout(8000) });
-      const t = r.status === 200 ? await r.text() : '';
-      out.push({ u, status: r.status, location: r.headers.get('location'), title: (t.match(/<title>([^<]*)<\/title>/) || [])[1] || '',
-        og: (t.match(/property="og:title" content="([^"]*)"/) || [])[1] || '', blogLink: (t.match(/blog\.naver\.com\/([\w-]+)/) || [])[1] || '',
-        keys: [...t.matchAll(/"(influencerId|channelId|nickName|keyword|subject|category)":"([^"]{0,40})"/g)].slice(0, 8).map((m) => m[1] + '=' + m[2]) });
-    } catch (e) { out.push({ u, error: e.message }); }
+  const t = await (await fetch('https://m.blog.naver.com/PostView.naver?blogId=blogpeople&logNo=224464503351', { headers: { Referer: 'https://m.blog.naver.com/blogpeople' } })).text();
+  const ids = [...new Set([...t.matchAll(/blog\.naver\.com\/([A-Za-z0-9_-]{3,30})(?=["/?&\s<])/g)].map((m) => m[1]))]
+    .filter((x) => !/^(blogpeople|PostView|PostList|prologue|profile|api|my|section|BlogHome)/i.test(x)).slice(0, 8);
+  const out = { found: ids.length, checks: [] };
+  for (const id of ids) {
+    try { const r = (await (await fetch(`https://m.blog.naver.com/api/blogs/${id}`, { headers: { Accept: 'application/json', Referer: `https://m.blog.naver.com/${id}` } })).json()).result || {};
+      out.checks.push({ id, mate: r.isNaverMateBlog, mateInfo: r.mateInfo, cit: r.mateCitations }); } catch (e) { out.checks.push({ id, error: e.message }); }
   }
   res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(out));
 };
