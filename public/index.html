@@ -103,6 +103,7 @@
   .lg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .rk { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
   .rk.shown, .rk.missing { color: #fff; } .rk.pending { color: #3d2a00; } .rk.rerr { color: var(--muted); }
+  .verify { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .plist { list-style: none; margin: 0; padding: 0; }
   .plist li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .plist li:last-child { border-bottom: 0; }
@@ -292,8 +293,10 @@ function expoRankCell(b, item) {
   const logNo = (item.link.match(/\/(\d{9,})/) || [])[1];
   const x = b.expo.map.get(logNo);
   if (!x) return '<span class="hint">-</span>';
-  return `<span class="rk ${stCls(x)}" title="${x.rank ? '검색 ' + x.rank + '위' : ''}">${ST[x.status]}${x.rank ? ` <small>${x.rank}위</small>` : ''}</span>`;
+  const badge = `<span class="rk ${stCls(x)}" title="${x.rank ? '검색 ' + x.rank + '위' : ''}">${ST[x.status]}${x.rank ? ` <small>${x.rank}위</small>` : ''}</span>`;
+  return x.status === 'shown' ? badge : `${badge} <a class="verify" href="${naverBlogSearch(item.title)}" target="_blank" rel="noopener" title="네이버 블로그 탭에서 이 제목을 검색해 직접 확인">직접 확인</a>`;
 }
+const naverBlogSearch = (title) => 'https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(title);
 function renderExpo() {
   const b = blogs[current], el = document.getElementById('expo'); if (!b) return;
   const e = b.expo;
@@ -305,7 +308,7 @@ function renderExpo() {
     <div class="hint" style="margin-top:6px">확인 시각 ${fmtDate(e.data.checkedAt)}</div></div>
     <div><div class="sq">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)} · ${ST[x.status]}${x.rank ? ' ' + x.rank + '위' : ''}"></span>`).join('')}</div>
     <div class="lg"><span><i class="shown"></i>노출: 검색 ${e.data.display}위 안</span><span><i class="pending"></i>미반영: ${e.data.display}위 밖, 발행 ${e.data.pendingHours}시간 이내</span><span><i class="missing"></i>누락: ${e.data.display}위 밖, 발행 ${e.data.pendingHours}시간 지남</span></div>
-    <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. 글 제목으로 네이버 검색 API를 조회한 결과라 실제 블로그탭 화면과 다를 수 있어요.</p></div></div>`;
+    <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. <b>노출은 확실하지만, 미반영·누락은 검색 API에서 못 찾았다는 뜻일 뿐이에요.</b> 검색 API는 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 아래 게시물 목록의 '직접 확인'으로 실제 화면을 확인해 주세요.</p></div></div>`;
 }
 
 function diagnose(s) {
