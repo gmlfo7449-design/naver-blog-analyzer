@@ -45,7 +45,7 @@
 
   /* 머리 */
   h1 { font-size: 26px; line-height: 1.25; margin: 0; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
-  .sub { color: var(--muted); margin: 6px 0 22px; max-width: 62ch; }
+  .sub { color: var(--muted); margin: 6px 0 22px; max-width: 62ch; text-wrap: pretty; word-break: keep-all; }
 
   /* 입력: 내 블로그 대 경쟁 블로그 */
   form { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end;
@@ -64,8 +64,8 @@
   button.ghost:hover { border-color: var(--muted); }
   @media (max-width: 860px) { form { grid-template-columns: 1fr; } form button[type=submit] { width: 100%; } }
   .hint { color: var(--muted); font-size: 13px; line-height: 1.5; }
-  form + .hint { margin-top: 10px; max-width: 80ch; }
-  .notice { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  form + .hint { margin-top: 10px; max-width: 80ch; word-break: keep-all; }
+  .notice { color: var(--muted); font-size: 13px; margin-top: 4px; word-break: keep-all; }
   .notice b { color: var(--ink); font-weight: 600; }
   .error { background: var(--miss-soft); color: var(--miss); border-radius: 10px; padding: 10px 14px; margin-top: 14px; font-size: 14px; }
 
@@ -171,7 +171,16 @@
   .plist li:last-child { border-bottom: 0; }
   .plist a { color: var(--ink); font-size: 14px; line-height: 1.45; text-decoration: none; display: block; overflow-wrap: anywhere; }
   .plist a:hover { text-decoration: underline; }
+  .pm .sep { display: inline-block; width: 1px; height: 10px; background: var(--rule); margin: 0 8px; vertical-align: -1px; }
   .plist .pm { font-size: 12px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  /* 첫 화면: 결과 미리보기 */
+  #intro { margin-top: 56px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
+  @media (max-width: 860px) { #intro { grid-template-columns: 1fr; gap: 20px; } }
+  .intro-strip .sq span { height: 72px; }
+  @media (max-width: 720px) { .intro-strip .sq span { height: 34px; } }
+  .intro-copy h2 { font-size: 22px; line-height: 1.35; margin: 0; letter-spacing: -0.01em; text-wrap: balance; word-break: keep-all; }
+  .intro-copy p { color: var(--muted); margin: 10px 0 18px; max-width: 46ch; word-break: keep-all; }
 
   /* 비교 화면 맨 위: 내 블로그 노출 */
   #cmpExpoSec { margin-top: 36px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 22px; }
@@ -193,9 +202,21 @@
     </div>
     <button type="submit">분석하기</button>
   </form>
-  <div class="hint">블로그 주소를 그대로 붙여넣거나 아이디만 입력하세요. 제목 노출 확인은 내 블로그만 바로 진행하고, 경쟁 블로그는 버튼을 눌러 따로 확인합니다.</div>
+  <div class="hint">블로그 주소를 붙여넣어도 되고 아이디만 써도 됩니다. 제목 노출은 내 블로그만 바로 확인하고, 경쟁 블로그는 결과 화면에서 버튼을 눌러 확인합니다.</div>
   <div class="notice">조회수, 공감, 댓글 수는 공개 정보가 아니어서 분석에 넣지 않았습니다.</div>
   <div id="err" class="error hidden"></div>
+
+  <section id="intro" aria-label="분석하면 보이는 것">
+    <div class="intro-strip" aria-hidden="true">
+      <div class="sq"><span class="pending"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="missing"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="missing"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="missing"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span></div>
+      <div class="sq-axis"><span>최신 글</span><span>30번째 글</span></div>
+    </div>
+    <div class="intro-copy">
+      <h2>최근 글 30개가 검색에 나오는지 한눈에 보여줍니다</h2>
+      <p>칸 하나가 글 하나예요. 초록은 정상, 노랑은 반영중, 빨강은 누락입니다. 아래로는 경쟁 블로그와 발행 주기, 요일과 시간대, 카테고리와 태그를 나란히 비교합니다.</p>
+      <button type="button" class="ghost" id="demo">예시 블로그로 결과 보기</button>
+    </div>
+  </section>
 
   <div id="cmpView" class="hidden">
     <section class="card" id="cmpExpoSec">
@@ -440,10 +461,10 @@ function diagnose(s) {
   const zr = s.weeks.length ? s.zeroWeeks / s.weeks.length : 0;
   const top1 = topN(s.cats, 1)[0];
   return [
-    ['발행량', g(s.perWeek, 3, 1), `주 평균 ${s.perWeek}회`, '주 3회 이상 좋음 · 1회 이상 보통'],
-    ['꾸준함', g(zr, 0.1, 0.3, false), `글 없는 주 ${s.zeroWeeks}/${s.weeks.length}주 (${Math.round(zr * 100)}%)`, '빈 주 10% 이하 좋음 · 30% 이하 보통'],
-    ['최근 활동', g(s.daysSinceLast, 7, 14, false), `마지막 글 ${Math.round(s.daysSinceLast)}일 전`, '7일 이내 좋음 · 14일 이내 보통'],
-    ['태그 활용', g(s.avgTags, 5, 2), `글당 평균 ${s.avgTags}개, 태그 없는 글 ${s.noTag}개`, '평균 5개 이상 좋음 · 2개 이상 보통'],
+    ['발행량', g(s.perWeek, 3, 1), `주 평균 ${s.perWeek}회`, '주 3회 이상이면 좋음, 1회 이상이면 보통'],
+    ['꾸준함', g(zr, 0.1, 0.3, false), `글 없는 주 ${s.zeroWeeks}/${s.weeks.length}주 (${Math.round(zr * 100)}%)`, '빈 주가 10% 이하면 좋음, 30% 이하면 보통'],
+    ['최근 활동', g(s.daysSinceLast, 7, 14, false), `마지막 글 ${Math.round(s.daysSinceLast)}일 전`, '7일 이내면 좋음, 14일 이내면 보통'],
+    ['태그 활용', g(s.avgTags, 5, 2), `글당 평균 ${s.avgTags}개, 태그 없는 글 ${s.noTag}개`, '평균 5개 이상이면 좋음, 2개 이상이면 보통'],
     ['주제 집중도', 'info', `최다 카테고리 '${top1[0]}' ${Math.round(top1[1] / s.n * 100)}%`, `카테고리 ${s.cats.size}개 사용 (좋고 나쁨 판단 안 함)`],
   ];
 }
@@ -472,7 +493,7 @@ function render() {
   document.getElementById('profile').innerHTML = `
     ${data.channel.image ? `<img src="${esc(data.channel.image)}" alt="" referrerpolicy="no-referrer">` : ''}
     <div>${roleTag(blogs[current])}<a href="${esc(data.channel.link || 'https://blog.naver.com/' + data.blogId)}" target="_blank" rel="noopener">${esc(data.channel.title || data.blogId)}</a>
-    <p>${esc(data.blogId)} · ${esc(data.channel.description || '')}</p></div>`;
+    <p>${esc(data.blogId)}${data.channel.description ? '<br>' + esc(data.channel.description) : ''}</p></div>`;
   const k = [
     [s.n, '분석된 글 수'], [s.perWeek ?? '-', '주 평균 발행'], [s.medGap != null ? s.medGap + '일' : '-', '발행 간격(중앙값)'],
     [s.last30 ?? 0, '최근 30일 발행'], [s.daysSinceLast != null ? Math.round(s.daysSinceLast) + '일 전' : '-', '마지막 발행'],
@@ -485,7 +506,7 @@ function render() {
   document.getElementById('diag').innerHTML = diagnose(s).map(([t, lv, v, c]) =>
     `<div><div class="t">${t}<span class="pill ${lv === 'info' ? 'mid' : lv}">${L[lv]}</span></div><div class="d">${esc(v)}<br>${c}</div></div>`).join('');
   document.getElementById('meta').textContent = s.n
-    ? `분석 시각 ${fmtDate(data.fetchedAt)} · 분석 범위 ${fmtDate(s.oldest).slice(0, 10)} ~ ${fmtDate(s.newest).slice(0, 10)} (최근 공개 글 ${s.n}개)` : '';
+    ? `${fmtDate(s.oldest).slice(0, 10)}부터 ${fmtDate(s.newest).slice(0, 10)}까지 쓴 최근 글 ${s.n}개를 ${fmtDate(data.fetchedAt)}에 분석했어요.` : '';
 
   clearCharts();
   if (!s.n) return;
@@ -582,8 +603,8 @@ function renderCompare(tableOnly) {
   renderCmpExpo();
   if (tableOnly) return;
   blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); });
-  document.getElementById('cmpMeta').textContent = blogs.map((b) => b.stats.n
-    ? `${nameOf(b)}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${nameOf(b)}: 공개 글 없음`).join(' · ') + ` · 분석 시각 ${fmtDate(blogs[0].data.fetchedAt)}`;
+  document.getElementById('cmpMeta').innerHTML = blogs.map((b) => b.stats.n
+    ? `${esc(nameOf(b))}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${esc(nameOf(b))}: 공개 글 없음`).join('<br>') + `<br>${fmtDate(blogs[0].data.fetchedAt)}에 분석`;
 
   clearCharts();
   if (!live.length) return;
@@ -655,7 +676,7 @@ function renderCmpPosts() {
   el.innerHTML = blogs.map((b, bi) => {
     const list = lists[bi];
     const items = list.slice(0, cmpLimit).map((i) => `<li><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>
-      <div class="pm">${fmtDate(i.pubDate)} · ${esc(i.category)} · 태그 ${i.tags.length}</div></li>`).join('');
+      <div class="pm">${fmtDate(i.pubDate)}<span class="sep"></span>${esc(i.category)}<span class="sep"></span>태그 ${i.tags.length}개</div></li>`).join('');
     return `<div class="col"><h3>${dotOf(bi)}${roleTag(b)}${esc(nameOf(b))}<span class="cnt">${Math.min(cmpLimit, list.length)}/${list.length}</span></h3>
       ${items ? `<ul class="plist">${items}</ul>` : '<span class="hint">해당하는 글이 없어요</span>'}</div>`;
   }).join('');
@@ -693,6 +714,7 @@ document.getElementById('f').onsubmit = async (e) => {
   document.getElementById('result').classList.add('hidden');
   document.getElementById('cmpView').classList.add('hidden');
   if (!blogs.length) return;
+  document.getElementById('intro').classList.add('hidden');
   if (blogs.length === 1) render(); else renderCompare();
 };
 
@@ -709,6 +731,10 @@ document.getElementById('cmpCsv').onclick = () => {
     ...allPosts().map((i) => [nameOf(blogs[i.bi]), fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link])]);
 };
 
+document.getElementById('demo').onclick = () => {
+  document.getElementById('qMe').value = 'blogpeople'; document.getElementById('qC1').value = 'naverofficial'; document.getElementById('qC2').value = 'naver_search';
+  document.getElementById('f').requestSubmit();
+};
 // 주소로 바로 열기: ?me=아이디&c1=아이디&c2=아이디 (예전 형식 ?id=a,b,c 도 지원)
 (() => {
   const sp = new URLSearchParams(location.search);
