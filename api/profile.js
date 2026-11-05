@@ -38,14 +38,15 @@ async function homeLinksBlog(handle, id) {
 async function influencerFromSearch(id, title) {
   if (!title) return null;
   try {
-    const q = '"' + title.replace(/["“”]/g, ' ').trim() + '"';
+    // 따옴표로 감싼 정확히 일치 검색은 제목 속 “ ” ‘ ’ · 때문에 결과가 0건이 되기도 해서, 문장부호를 빼고 그냥 검색한다
+    const q = title.replace(/["'“”‘’]/g, ' ').replace(/\s+/g, ' ').trim();
     const r = await fetch('https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(q), { headers: { 'User-Agent': UA, 'Accept-Language': 'ko-KR' }, signal: AbortSignal.timeout(7000) });
     if (!r.ok) return null;
     const html = await r.text();
     const re = new RegExp(`blog\\.naver\\.com\\/${id.replace(/[-]/g, '\\-')}(?=[\\/"?])`, 'gi');
     for (const m of html.matchAll(re)) {
       // 이 글 링크 바로 앞 작성자 영역에서 인플루언서 홈 링크를 찾는다. 사이에 다른 블로그 링크가 끼면 다른 글이므로 버린다
-      const before = html.slice(Math.max(0, m.index - 2500), m.index);
+      const before = html.slice(Math.max(0, m.index - 6000), m.index);
       const homes = [...before.matchAll(/href="https:\/\/in\.naver\.com\/([\w.-]{2,40})"/g)];
       if (!homes.length) continue;
       const last = homes[homes.length - 1];
@@ -58,8 +59,8 @@ async function influencerFromSearch(id, title) {
 }
 async function influencerHome(id, titles = []) {
   if (await homeLinksBlog(id, id)) return { url: `https://in.naver.com/${id}`, via: 'home' };
-  // 방금 쓴 글은 아직 검색에 없을 수 있어 조금 지난 글부터 최대 2개 시도
-  for (const t of titles.slice(0, 2)) { const s = await influencerFromSearch(id, t); if (s) return { url: s, via: 'search' }; }
+  // 방금 쓴 글은 아직 검색에 없을 수 있어 며칠 지난 글부터 최대 3개 시도
+  for (const t of titles.slice(0, 3)) { const s = await influencerFromSearch(id, t); if (s) return { url: s, via: 'search' }; }
   return null;
 }
 
@@ -68,7 +69,7 @@ async function load(id) {
     getJson(`${BASE}${id}`, id),
     getJson(`${BASE}${id}/post-list?categoryNo=0&itemCount=30&page=1`, id),
     getJson(`${BASE}${id}/popular-post-list`, id),
-    getBlog(id).then((bl) => { const it = [...(bl.items || [])].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)); return influencerHome(id, [it[3], it[1]].filter(Boolean).map((x) => x.title)); }).catch(() => influencerHome(id, [])),
+    getBlog(id).then((bl) => { const it = [...(bl.items || [])].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)); return influencerHome(id, [it[5], it[10], it[2]].filter(Boolean).map((x) => x.title)); }).catch(() => influencerHome(id, [])),
   ]);
   const out = { blogId: id, fetchedAt: new Date().toISOString(), profile: null, posts: [], popular: [], errors: [] };
   if (info.status === 'fulfilled') {
