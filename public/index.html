@@ -280,7 +280,7 @@
       <p class="hint hidden" id="cmpWeekHint" style="margin-top:8px">글을 자주 쓰는 블로그가 있어 최근 글 30개가 덮는 공통 기간이 4주가 안 돼요. 그래서 주차별 추이 차트는 숨기고, 발행 빈도는 위 표의 주 평균 발행과 발행 간격으로 비교합니다.</p>
     </div>
     <div class="card">
-      <h2>방문자 추이 <small>블로그별 날짜별 방문자 수예요. 값이 없는 날은 비워 둡니다.</small></h2>
+      <h2>방문자 비교 <small>오늘 방문자는 모든 블로그를, 날짜별 추이는 값이 있는 블로그만 보여줘요.</small></h2>
       <div id="cmpVisit"></div>
     </div>
     <div class="card">
@@ -686,16 +686,27 @@ function renderVisit(b) {
 let cmpVisitChart = null;
 function renderCmpVisit() {
   const el = document.getElementById('cmpVisit'); if (!el) return;
+  // 1) 모든 블로그: 오늘 지금까지 방문자 (블로그 정보에서 바로 가져옴)
+  const today = blogs.map((b) => { const pr = b.prof && b.prof.status === 'ok' && b.prof.data.profile; return { b, v: pr ? pr.todayVisitors : null, total: pr ? pr.totalVisitors : null, loading: profLoading(b) }; });
+  const tmax = Math.max(1, ...today.map((x) => x.v || 0));
+  const todayHtml = `<div class="sub2" style="margin:0 0 10px;font-weight:600;color:var(--ink)">오늘 지금까지 방문자 <span class="hint" style="font-weight:400">자정부터 집계 중</span></div>
+    ${today.map((x) => `<div class="bar" style="grid-template-columns:minmax(0,1fr) 92px"><div class="track"><div class="fill" style="width:${x.v ? Math.max(2, x.v / tmax * 100) : 0}%;background:${colorOf(blogs.indexOf(x.b))};opacity:.35"></div><span class="name">${roleTag(x.b)}${esc(nameOf(x.b))}</span></div><span class="pct" style="color:var(--ink);font-weight:600">${x.loading ? '…' : x.v == null ? '-' : fmtN(x.v) + '명'}</span></div>`).join('')}`;
+  // 2) 날짜별 추이: 위젯을 공개했거나 기록이 쌓인 블로그만
   const per = blogs.map((b) => ({ b, days: visitDays(b) }));
-  if (blogs.some((b) => !b.vis || b.vis.status === 'loading')) { el.innerHTML = '<p class="empty">방문자 수를 불러오고 있어요.</p>'; return; }
+  const loadingDays = blogs.some((b) => !b.vis || b.vis.status === 'loading');
   const withData = per.filter((x) => x.days.length >= 2);
   const missing = per.filter((x) => x.days.length < 2).map((x) => ({ name: nameOf(x.b), storage: x.b.vis && x.b.vis.data && x.b.vis.data.storage }));
-  if (!withData.length) { el.innerHTML = `<p class="empty">아직 날짜별 방문자 수가 있는 블로그가 없어요. 방문자 위젯을 공개하지 않은 블로그는 오늘부터 매일 기록해서, 내일부터 그래프가 채워집니다.</p>`; return; }
+  const storageOn = missing.some((m) => m.storage);
+  const why = missing.length ? `<p class="hint" style="margin-top:10px">${missing.map((m) => esc(m.name)).join(', ')}: 방문자 위젯이 비공개라 날짜별 값을 네이버가 주지 않아요. ${storageOn ? '오늘부터 매일 누적 방문자 수를 기록해서, 내일부터 그래프에 함께 나타납니다.' : '매일 누적 방문자 수를 기록하는 저장소를 연결하면, 연결한 다음 날부터 함께 비교할 수 있어요.'}</p>` : '';
+  let trend;
+  if (loadingDays) trend = '<p class="empty">날짜별 방문자 수를 불러오고 있어요.</p>';
+  else if (!withData.length) trend = '';
+  else trend = `<div class="sub2" style="margin:26px 0 10px;font-weight:600;color:var(--ink)">날짜별 방문자</div><div class="legend">${withData.map((x) => `<span>${dotOf(blogs.indexOf(x.b))}${esc(nameOf(x.b))}</span>`).join('')}</div>
+    <div class="chart-box" style="height:240px"><canvas id="cCmpVisit" aria-label="블로그별 날짜별 방문자 수 선 차트"></canvas></div>`;
+  el.innerHTML = todayHtml + trend + (loadingDays ? '' : why);
+  if (cmpVisitChart) { cmpVisitChart.destroy(); cmpVisitChart = null; }
+  if (loadingDays || !withData.length) return;
   const dates = [...new Set(withData.flatMap((x) => x.days.map((d) => d.date)))].sort();
-  el.innerHTML = `<div class="legend">${withData.map((x) => `<span>${dotOf(blogs.indexOf(x.b))}${esc(nameOf(x.b))}</span>`).join('')}</div>
-    <div class="chart-box" style="height:260px"><canvas id="cCmpVisit" aria-label="블로그별 날짜별 방문자 수 선 차트"></canvas></div>
-    ${missing.length ? `<p class="hint" style="margin-top:10px">${missing.map((m) => esc(m.name)).join(', ')}: 방문자 위젯이 비공개예요. ${missing[0].storage ? '오늘부터 매일 기록해서 내일부터 그래프에 나타납니다.' : '매일 기록하는 저장소를 연결하면 다음 날부터 그래프에 나타납니다.'}</p>` : ''}`;
-  if (cmpVisitChart) cmpVisitChart.destroy();
   cmpVisitChart = new Chart(document.getElementById('cCmpVisit'), {
     type: 'line',
     data: { labels: dates.map((d) => d.slice(5).replace('-', '.')), datasets: withData.map((x) => { const m = new Map(x.days.map((d) => [d.date, d.count])); const c = colorOf(blogs.indexOf(x.b));
@@ -717,7 +728,7 @@ async function loadProfile(b) {
   } catch (_) { b.prof = { status: 'error' }; }
   if (!blogs.includes(b)) return;
   if (blogs.length === 1) { renderMast(document.getElementById('mast'), b); renderKpis(b); renderPosts(); renderPop(b); if (b.vis && b.vis.status === 'ok') renderVisit(b); }
-  else { renderCompare(true); renderCmpPosts(); if (blogs.every((x) => x.vis && x.vis.status !== 'loading')) renderCmpVisit(); }
+  else { renderCompare(true); renderCmpPosts(); renderCmpVisit(); }
 }
 const logNoOfItem = (it) => (it.link.match(/\/(\d{9,})/) || [])[1];
 const reactOf = (b, it) => (b.prof && b.prof.map ? b.prof.map.get(logNoOfItem(it)) : null);
