@@ -286,7 +286,7 @@ function expoRefresh(b) {
 async function fetchExpoBatch(id, offset) {
   for (let t = 0; t < 3; t++) {          // 요청 자체가 실패하면 2번 더 시도
     try {
-      const r = await fetch(`/api/exposure?v=6&id=${encodeURIComponent(id)}&offset=${offset}&limit=${EXPO_BATCH}${t ? '&retry=' + Date.now() : ''}`);
+      const r = await fetch(`/api/exposure?v=7&id=${encodeURIComponent(id)}&offset=${offset}&limit=${EXPO_BATCH}${t ? '&retry=' + Date.now() : ''}`);
       const body = await r.json();
       if (r.ok) return { ok: true, body };
       if (body.code === 'no_key' || r.status === 400 || r.status === 404) return { ok: false, fatal: true, body };
@@ -342,7 +342,7 @@ function renderExpo() {
     <div class="hint" style="margin-top:6px">정상 ${s.shown} · 미반영 ${s.pending} · 누락 ${s.missing}${s.error ? ` · 확인 실패 ${s.error}` : ''}</div>
     ${e.data.checkedAt ? `<div class="hint" style="margin-top:6px">확인 시각 ${fmtDate(e.data.checkedAt)}</div>` : ''}${retry}</div>
     <div><div class="sq">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)} · ${ST[x.status]}"></span>`).join('')}${'<span></span>'.repeat(Math.max(0, (e.total || 0) - e.data.results.length))}</div>
-    <div class="lg"><span><i class="shown"></i>정상: 검색에 나옴</span><span><i class="pending"></i>미반영: 발행 ${e.data.pendingHours || 24}시간 이내 (1시간 이내는 검색 안 함)</span><span><i class="missing"></i>누락: 발행 ${e.data.pendingHours || 24}시간이 지났는데 검색에 없음</span></div>
+    <div class="lg"><span><i class="shown"></i>정상: 검색에 나옴</span><span><i class="pending"></i>미반영: 발행 1시간 이내 (아직 검색하지 않음)</span><span><i class="missing"></i>누락: 발행 1시간이 지났는데 검색에 없음</span></div>
     <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. <b>정상은 확실하지만, 미반영·누락은 검색 API에서 못 찾았다는 뜻일 뿐이에요.</b> 검색 API는 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 아래 게시물 목록의 '직접 확인'으로 실제 화면을 확인해 주세요.</p></div></div>`;
 }
 
