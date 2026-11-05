@@ -10,11 +10,12 @@ const PENDING_HOURS = 48;  // 발행 후 이 시간 안이면 '미반영'으로 
 const CONCURRENCY = 5;
 const cache = new Map();
 const TTL_MS = 60 * 60 * 1000;
+const VERSION = 2; // 판정 방식이 바뀌면 올려서 CDN 캐시를 무효화
 
 const logNoOf = (url) => (String(url).match(/\/(\d{9,})(?:[/?#]|$)/) || [])[1] || (String(url).match(/logNo=(\d+)/) || [])[1] || '';
 
-async function searchRank(title, blogId, logNo) {
-  const q = new URLSearchParams({ query: title, display: String(DISPLAY), start: '1', sort: 'sim' });
+async function searchRank(title, blogId, logNo, sort = 'sim', display = DISPLAY) {
+  const q = new URLSearchParams({ query: title, display: String(display), start: '1', sort });
   const res = await fetch(`${API}?${q}`, {
     headers: { 'X-NCP-APIGW-API-KEY-ID': process.env.NAVER_CLIENT_ID, 'X-NCP-APIGW-API-KEY': process.env.NAVER_CLIENT_SECRET },
   });
@@ -50,9 +51,13 @@ module.exports = async function handler(req, res) {
     const posts = [...blog.items].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, MAX_POSTS);
     const results = await pool(posts, CONCURRENCY, async (p) => {
       const logNo = logNoOf(p.link);
-      const r = await searchRank(p.title, id, logNo);
+      let r = await searchRank(p.title, id, logNo);
+      // 정확도순 30위 안에 없으면, 최신순 100개에서 한 번 더 찾는다 → 있으면 '검색엔 있지만 30위 밖'
+      let indexed = !!r.rank;
+      if (!r.rank && !r.error) { const d = await searchRank(p.title, id, logNo, 'date', 100); indexed = !!d.rank; r.dateRank = d.rank; }
+      r.indexed = indexed;
       const ageH = (Date.now() - new Date(p.pubDate).getTime()) / 36e5;
-      const status = r.error ? 'error' : r.rank ? 'shown' : ageH < PENDING_HOURS ? 'pending' : 'missing';
+      const status = r.error ? 'error' : r.indexed ? 'shown' : ageH < PENDING_HOURS ? 'pending' : 'missing';
       return { logNo, title: p.title, pubDate: p.pubDate, status, ...r };
     });
     const data = { blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, pendingHours: PENDING_HOURS, results };
