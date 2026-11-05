@@ -9,10 +9,12 @@
   :root {
     --bg: #f6f7f9; --card: #ffffff; --text: #1a1d21; --muted: #6b7280; --line: #e5e7eb;
     --accent: #03a94d; --accent-soft: #e6f6ed; --warn: #b45309; --warn-soft: #fef3c7;
+    --s1: #03a94d; --s2: #2563eb; --s3: #e8710a; --s4: #9333ea; --s5: #db2777;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #111315; --card: #1a1d21; --text: #e8eaed; --muted: #9aa0a6; --line: #2c3036;
-      --accent: #2fd27a; --accent-soft: #163322; --warn: #fbbf24; --warn-soft: #3a2e0f; }
+      --accent: #2fd27a; --accent-soft: #163322; --warn: #fbbf24; --warn-soft: #3a2e0f;
+      --s1: #34d27f; --s2: #60a5fa; --s3: #fb923c; --s4: #c084fc; --s5: #f472b6; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
@@ -71,6 +73,22 @@
   .pill.good { background: var(--accent-soft); color: var(--accent); }
   .pill.mid { background: var(--warn-soft); color: var(--warn); }
   .pill.bad { background: #fde8e8; color: #c62828; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; flex: none; }
+  #cmpTable th.num { text-align: right; }
+  #cmpTable td.best { font-weight: 700; color: var(--accent); }
+  #cmpTable tr.sec td { color: var(--muted); font-size: 12px; padding-top: 14px; border-bottom: 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; margin-bottom: 8px; }
+  .cols { display: grid; gap: 12px; }
+  .col { background: var(--bg); border-radius: 10px; padding: 12px; min-width: 0; }
+  .col h3 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; overflow-wrap: anywhere; }
+  .col .sub2 { font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
+  .bar { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 6px; align-items: center; font-size: 12px; margin: 4px 0; }
+  .bar .track { position: relative; height: 20px; border-radius: 4px; background: var(--card); overflow: hidden; }
+  .bar .fill { position: absolute; inset: 0 auto 0 0; opacity: .28; }
+  .bar .name { position: absolute; left: 6px; top: 2px; right: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar .pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .col .chips .chip { font-size: 12px; padding: 3px 8px; }
+  .chip.shared { outline: 1px solid var(--accent); }
   @media (prefers-color-scheme: dark) { .pill.bad { background: #3a1714; color: #ff8a80; } }
 </style>
 </head>
@@ -87,12 +105,35 @@
   <div class="notice">RSS 특성상 <b>최근 공개 글 최대 50개</b>만 분석됩니다. 조회수·공감·댓글 수, 검색 순위, 본문 전체 글자 수는 RSS에 없어 분석할 수 없습니다.</div>
   <div id="err" class="error hidden"></div>
 
-  <div id="compare" class="card hidden">
-    <h2>블로그 비교</h2>
-    <div class="scroll"><table id="cmpTable"></table></div>
+  <div id="cmpView" class="hidden">
+    <div class="card">
+      <h2>블로그 비교 <small>초록색 굵은 값이 해당 항목에서 가장 좋은 블로그입니다</small></h2>
+      <div class="scroll"><table id="cmpTable"></table></div>
+      <div class="meta" id="cmpMeta"></div>
+    </div>
+    <div class="card">
+      <h2>주차별 발행 추이 <small>블로그마다 RSS에 담긴 기간이 달라, 기간 밖은 비워 둡니다</small></h2>
+      <div class="legend" id="cmpLegend"></div>
+      <div class="chart-box" style="height:280px"><canvas id="cmpWeek" aria-label="블로그별 주차별 발행 수 선 차트"></canvas></div>
+    </div>
+    <div class="grid" style="margin-top:16px">
+      <div class="card"><h2>요일별 발행 비중 <small>각 블로그 글 수 대비 %</small></h2><div class="chart-box"><canvas id="cmpDay" aria-label="요일별 발행 비중 막대 차트"></canvas></div></div>
+      <div class="card"><h2>시간대별 발행 비중 <small>한국시간, 각 블로그 글 수 대비 %</small></h2><div class="chart-box"><canvas id="cmpHour" aria-label="시간대별 발행 비중 선 차트"></canvas></div></div>
+    </div>
+    <div class="card">
+      <h2>카테고리와 태그 <small>테두리가 있는 태그는 다른 블로그도 쓴 공통 태그</small></h2>
+      <div class="scroll"><div class="cols" id="cmpCols"></div></div>
+    </div>
+    <div class="card">
+      <div class="row-actions">
+        <h2 style="margin:0">전체 게시물 <small>최신순</small></h2>
+        <input id="cmpFilter" type="text" placeholder="제목·태그·카테고리 검색" />
+        <button class="ghost" id="cmpCsv" type="button">CSV 다운로드</button>
+      </div>
+      <div class="scroll"><table id="cmpPosts"></table></div>
+      <div style="text-align:center;margin-top:12px"><button class="ghost" id="cmpMore" type="button" hidden>더 보기</button></div>
+    </div>
   </div>
-
-  <div id="tabs" class="tabs"></div>
   <div id="result" class="hidden">
     <div class="card">
       <div class="profile" id="profile"></div>
@@ -236,6 +277,7 @@ function clearCharts() { charts.forEach((c) => c.destroy()); charts = []; }
 function render() {
   const { data, stats: s } = blogs[current];
   document.getElementById('result').classList.remove('hidden');
+  document.getElementById('cmpView').classList.add('hidden');
   document.getElementById('profile').innerHTML = `
     ${data.channel.image ? `<img src="${esc(data.channel.image)}" alt="" referrerpolicy="no-referrer">` : ''}
     <div><a href="${esc(data.channel.link || 'https://blog.naver.com/' + data.blogId)}" target="_blank" rel="noopener">${esc(data.channel.title || data.blogId)}</a>
@@ -289,25 +331,122 @@ function renderPosts() {
     rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num">${i.tags.length}</td></tr>`).join('') + '</tbody>';
 }
 
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const colorOf = (i) => css('--s' + (i % 5 + 1));
+const nameOf = (b) => b.data.channel.title || b.data.blogId;
+const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
+const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
+
 function renderCompare() {
-  const box = document.getElementById('compare');
-  if (blogs.length < 2) return box.classList.add('hidden');
-  box.classList.remove('hidden');
+  const view = document.getElementById('cmpView');
+  view.classList.toggle('hidden', blogs.length < 2);
+  if (blogs.length < 2) return;
+  const live = blogs.filter((b) => b.stats.n);
+  Chart.defaults.color = css('--muted'); Chart.defaults.borderColor = css('--line');
+
+  // 1) 비교표: 숫자 + 진단 (best: 높을수록 좋음 'hi', 낮을수록 좋음 'lo')
+  const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
   const rows = [
-    ['분석된 글 수', (s) => s.n], ['주 평균 발행', (s) => s.perWeek], ['발행 간격 중앙값(일)', (s) => s.medGap],
-    ['최근 30일 발행', (s) => s.last30], ['마지막 발행(일 전)', (s) => Math.round(s.daysSinceLast)],
-    ['최장 공백(일)', (s) => s.maxGap], ['주력 요일', (s) => s.topDays.map((d) => DAYS[d]).join('·')], ['주력 시간대', (s) => s.topHours.map((h) => h + '시').join('·')],
-    ['카테고리 수', (s) => s.cats.size], ['글당 평균 태그', (s) => s.avgTags], ['제목 평균 길이(자)', (s) => s.avgTitle],
+    ['sec', '발행'],
+    ['분석된 글 수', (s) => s.n], ['주 평균 발행', (s) => s.perWeek, 'hi'], ['발행 간격 중앙값(일)', (s) => s.medGap, 'lo'],
+    ['최근 30일 발행', (s) => s.last30, 'hi'], ['마지막 발행(일 전)', (s) => Math.round(s.daysSinceLast), 'lo'],
+    ['최장 공백(일)', (s) => s.maxGap, 'lo'], ['글 없는 주', (s) => `${s.zeroWeeks}/${s.weeks.length}주`],
+    ['주력 요일', (s) => s.topDays.map((d) => DAYS[d]).join('·')], ['주력 시간대', (s) => s.topHours.map((h) => h + '시').join('·')],
+    ['sec', '콘텐츠'],
+    ['카테고리 수', (s) => s.cats.size], ['최다 카테고리', (s) => { const [c] = topN(s.cats, 1); return `${esc(c[0])} ${Math.round(c[1] / s.n * 100)}%`; }],
+    ['글당 평균 태그', (s) => s.avgTags, 'hi'], ['태그 없는 글', (s) => s.noTag, 'lo'], ['제목 평균 길이(자)', (s) => s.avgTitle],
+    ['대표 이미지 포함률', (s) => s.thumbRate + '%'],
+    ['sec', '운영 진단 (참고 기준)'],
+    ...['발행량', '꾸준함', '최근 활동', '태그 활용'].map((label, k) => [label, (s) => { const d = diagnose(s)[k]; return `<span class="pill ${d[1]}">${L[d[1]]}</span>`; }]),
   ];
-  document.getElementById('cmpTable').innerHTML = `<thead><tr><th></th>${blogs.map((b) => `<th class="num">${esc(b.data.channel.title || b.data.blogId)}</th>`).join('')}</tr></thead><tbody>` +
-    rows.map(([l, f]) => `<tr><td>${l}</td>${blogs.map((b) => `<td class="num">${b.stats.n ? f(b.stats) : '-'}</td>`).join('')}</tr>`).join('') + '</tbody>';
+  const head = `<thead><tr><th></th>${blogs.map((b, i) => `<th class="num">${dotOf(i)}<a href="${esc(b.data.channel.link || 'https://blog.naver.com/' + b.data.blogId)}" target="_blank" rel="noopener" style="color:inherit">${esc(nameOf(b))}</a></th>`).join('')}</tr></thead>`;
+  const body = rows.map(([label, f, dir]) => {
+    if (label === 'sec') return `<tr class="sec"><td colspan="${blogs.length + 1}">${f}</td></tr>`;
+    const vals = blogs.map((b) => (b.stats.n ? f(b.stats) : null));
+    let best = null;
+    if (dir) { const nums = vals.filter((v) => typeof v === 'number'); if (new Set(nums).size > 1) best = dir === 'hi' ? Math.max(...nums) : Math.min(...nums); }
+    return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${best !== null && v === best ? ' best' : ''}">${v ?? '-'}</td>`).join('')}</tr>`;
+  }).join('');
+  document.getElementById('cmpTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+  document.getElementById('cmpMeta').textContent = blogs.map((b) => b.stats.n
+    ? `${nameOf(b)}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${nameOf(b)}: 공개 글 없음`).join(' · ') + ` · 분석 시각 ${fmtDate(blogs[0].data.fetchedAt)}`;
+
+  clearCharts();
+  if (!live.length) return;
+  document.getElementById('cmpLegend').innerHTML = blogs.map((b, i) => `<span>${dotOf(i)}${esc(nameOf(b))}</span>`).join('');
+
+  // 2) 주차별 추이: 전체 블로그의 기간을 합친 공통 축
+  const first = new Date(Math.min(...live.map((b) => weekStart(b.stats.oldest).getTime())));
+  const last = new Date(Math.max(...live.map((b) => weekStart(b.stats.newest).getTime())));
+  const keys = []; for (let w = first; w <= last; w = new Date(w.getTime() + 7 * 864e5)) keys.push(w.toISOString().slice(0, 10));
+  charts.push(new Chart(document.getElementById('cmpWeek'), {
+    type: 'line',
+    data: { labels: keys.map((k) => k.slice(2).replace(/-/g, '/')), datasets: blogs.map((b, i) => {
+      if (!b.stats.n) return { label: nameOf(b), data: [] };
+      const m = new Map(b.stats.items.map((it) => weekStart(it.pubDate).toISOString().slice(0, 10)).reduce((acc, k) => (acc.set(k, (acc.get(k) || 0) + 1), acc), new Map()));
+      const lo = weekStart(b.stats.oldest).getTime(), hi = weekStart(b.stats.newest).getTime();
+      return { label: nameOf(b), borderColor: colorOf(i), backgroundColor: colorOf(i), borderWidth: 2, pointRadius: 2, tension: .25, spanGaps: false,
+        data: keys.map((k) => { const t = new Date(k).getTime(); return t < lo || t > hi ? null : (m.get(k) || 0); }) };
+    }) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: '글 수' } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } } } },
+  }));
+
+  // 3) 요일·시간대 비중(%)
+  const pct = (arr, n) => arr.map((v) => (n ? Math.round(v / n * 1000) / 10 : 0));
+  const dayOrder = [1, 2, 3, 4, 5, 6, 0];
+  charts.push(new Chart(document.getElementById('cmpDay'), {
+    type: 'bar',
+    data: { labels: dayOrder.map((d) => DAYS[d]), datasets: blogs.map((b, i) => ({ label: nameOf(b), backgroundColor: colorOf(i), borderRadius: 3,
+      data: b.stats.n ? pct(dayOrder.map((d) => b.stats.heat[d].reduce((a, c) => a + c, 0)), b.stats.n) : [] })) },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw}%` } } },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + '%' } }, x: { grid: { display: false } } } },
+  }));
+  charts.push(new Chart(document.getElementById('cmpHour'), {
+    type: 'line',
+    data: { labels: Array.from({ length: 24 }, (_, h) => h + '시'), datasets: blogs.map((b, i) => ({ label: nameOf(b), borderColor: colorOf(i), backgroundColor: colorOf(i), borderWidth: 2, pointRadius: 0, tension: .3,
+      data: b.stats.n ? pct(Array.from({ length: 24 }, (_, h) => b.stats.heat.reduce((a, r) => a + r[h], 0)), b.stats.n) : [] })) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw}%` } } },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + '%' } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } } } },
+  }));
+
+  // 4) 블로그별 열: 카테고리 TOP5 + 태그 TOP12 (공통 태그 표시)
+  const tagOwners = new Map();
+  blogs.forEach((b) => b.stats.n && b.stats.tags.forEach((_, t) => tagOwners.set(t, (tagOwners.get(t) || 0) + 1)));
+  const colsEl = document.getElementById('cmpCols');
+  colsEl.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(220px, 1fr))`;
+  colsEl.innerHTML = blogs.map((b, i) => {
+    const s = b.stats;
+    if (!s.n) return `<div class="col"><h3>${dotOf(i)}${esc(nameOf(b))}</h3><span class="hint">공개 글 없음</span></div>`;
+    const cats = topN(s.cats, 5).map(([c, v]) => { const p = Math.round(v / s.n * 100);
+      return `<div class="bar"><div class="track"><div class="fill" style="width:${p}%;background:${colorOf(i)}"></div><span class="name">${esc(c)}</span></div><span class="pct">${p}%</span></div>`; }).join('');
+    const tags = topN(s.tags, 12).map(([t, v]) => `<span class="chip${tagOwners.get(t) > 1 ? ' shared' : ''}">${esc(t)}<b>${v}</b></span>`).join('') || '<span class="hint">태그 없음</span>';
+    return `<div class="col"><h3>${dotOf(i)}${esc(nameOf(b))}</h3><div class="sub2" style="margin-top:0">카테고리 TOP 5</div>${cats}<div class="sub2">태그 TOP 12</div><div class="chips">${tags}</div></div>`;
+  }).join('');
+
+  cmpLimit = 30;
+  renderCmpPosts();
 }
 
-function renderTabs() {
-  const el = document.getElementById('tabs');
-  if (blogs.length < 2) { el.innerHTML = ''; return; }
-  el.innerHTML = blogs.map((b, i) => `<button type="button" class="tab ${i === current ? 'on' : ''}" data-i="${i}">${esc(b.data.channel.title || b.data.blogId)}</button>`).join('');
-  el.querySelectorAll('.tab').forEach((t) => t.onclick = () => { current = +t.dataset.i; renderTabs(); render(); });
+function allPosts() {
+  return blogs.flatMap((b, i) => (b.stats.items || []).map((it) => ({ ...it, bi: i }))).sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+}
+let cmpLimit = 30;
+function renderCmpPosts() {
+  const q = document.getElementById('cmpFilter').value.trim().toLowerCase();
+  const all = allPosts().filter((i) => !q || (i.title + ' ' + i.tags.join(' ') + ' ' + i.category + ' ' + nameOf(blogs[i.bi])).toLowerCase().includes(q));
+  const rows = all.slice(0, cmpLimit);
+  const more = document.getElementById('cmpMore');
+  more.hidden = all.length <= cmpLimit;
+  more.textContent = `더 보기 (${rows.length} / ${all.length}개)`;
+  document.getElementById('cmpPosts').innerHTML = `<thead><tr><th>발행일</th><th>블로그</th><th>제목</th><th>카테고리</th><th class="num">태그</th></tr></thead><tbody>` +
+    rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td style="white-space:nowrap">${dotOf(i.bi)}${esc(nameOf(blogs[i.bi]))}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num">${i.tags.length}</td></tr>`).join('') + '</tbody>';
+}
+
+function downloadCsv(filename, rows) {
+  const q = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+  const blob = new Blob(['﻿' + rows.map((r) => r.map(q).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
 }
 
 document.getElementById('f').onsubmit = async (e) => {
@@ -325,18 +464,23 @@ document.getElementById('f').onsubmit = async (e) => {
   blogs = results.filter((r) => r.ok).map((r) => ({ data: r.body, stats: analyze(r.body) }));
   current = 0;
   history.replaceState(null, '', '?id=' + ids.join(','));
-  if (!blogs.length) { document.getElementById('result').classList.add('hidden'); document.getElementById('compare').classList.add('hidden'); renderTabs(); return; }
-  renderCompare(); renderTabs(); render();
+  document.getElementById('result').classList.add('hidden');
+  document.getElementById('cmpView').classList.add('hidden');
+  if (!blogs.length) return;
+  if (blogs.length === 1) render(); else renderCompare();
 };
 
 document.getElementById('filter').oninput = renderPosts;
 document.getElementById('csv').onclick = () => {
   const b = blogs[current]; if (!b) return;
-  const q = (v) => '"' + String(v).replace(/"/g, '""') + '"';
-  const lines = [['발행일(KST)', '제목', '카테고리', '태그', '태그수', 'URL'].map(q).join(',')]
-    .concat(b.stats.items.map((i) => [fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link].map(q).join(',')));
-  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${b.data.blogId}_posts.csv`; a.click();
+  downloadCsv(`${b.data.blogId}_posts.csv`, [['발행일(KST)', '제목', '카테고리', '태그', '태그수', 'URL'],
+    ...b.stats.items.map((i) => [fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link])]);
+};
+document.getElementById('cmpFilter').oninput = () => { cmpLimit = 30; renderCmpPosts(); };
+document.getElementById('cmpMore').onclick = () => { cmpLimit += 50; renderCmpPosts(); };
+document.getElementById('cmpCsv').onclick = () => {
+  downloadCsv(`blog_compare_${blogs.map((b) => b.data.blogId).join('_')}.csv`, [['블로그', '발행일(KST)', '제목', '카테고리', '태그', '태그수', 'URL'],
+    ...allPosts().map((i) => [nameOf(blogs[i.bi]), fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link])]);
 };
 
 const init = new URLSearchParams(location.search).get('id');
