@@ -770,8 +770,9 @@ function renderKpis(b) {
   document.getElementById('kpis').innerHTML = k.map(([v, l, n]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div>${n ? `<div class="n">${n}</div>` : ''}</div>`).join('');
 }
 
-const PV = (b, k) => (b.prof && b.prof.status === 'ok' && b.prof.data.profile ? b.prof.data.profile[k] : b.prof && b.prof.status === 'loading' ? '…' : null);
-const RV = (b, k) => { if (b.prof && b.prof.status === 'loading') return '…'; const r = reactStats(b); return r ? r[k] : null; };
+const profLoading = (b) => !b.prof || b.prof.status === 'loading';
+const PV = (b, k) => (profLoading(b) ? '…' : b.prof.status === 'ok' && b.prof.data.profile ? b.prof.data.profile[k] : null);
+const RV = (b, k) => { if (profLoading(b)) return '…'; const r = reactStats(b); return r ? r[k] : null; };
 function renderCmpExpo() {
   const me = blogs.find((b) => b.role === 'me');
   const sec = document.getElementById('cmpExpoSec');
@@ -803,7 +804,7 @@ function renderCompare(tableOnly) {
     ['sec', '규모와 반응'],
     ['이웃 수', (s, b) => PV(b, 'neighbors'), 'hi'], ['누적 방문자', (s, b) => PV(b, 'totalVisitors'), 'hi'], ['오늘 방문자', (s, b) => PV(b, 'todayVisitors'), 'hi'],
     ['글당 평균 공감', (s, b) => RV(b, 'likes'), 'hi'], ['글당 평균 댓글', (s, b) => RV(b, 'comments'), 'hi'],
-    ['인기글 10개 조회수 합', (s, b) => (b.prof && b.prof.status === 'loading' ? '…' : popSum(b)), 'hi'], ['인기글 1위 조회수', (s, b) => { if (b.prof && b.prof.status === 'loading') return '…'; const p = popOf(b); return p && p[0] ? p[0].views : null; }, 'hi'],
+    ['인기글 10개 조회수 합', (s, b) => (profLoading(b) ? '…' : popSum(b)), 'hi'], ['인기글 1위 조회수', (s, b) => { if (profLoading(b)) return '…'; const p = popOf(b); return p && p[0] ? p[0].views : null; }, 'hi'],
     ['sec', '제목 노출 (최근 글 30개)'],
     ['정상', 'shown'], ['반영중', 'pending'], ['누락', 'missing'],
     ['sec', '운영 진단 (참고 기준)'],
