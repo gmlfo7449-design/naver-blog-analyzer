@@ -21,11 +21,21 @@ async function getJson(url, blogId) {
 
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+// 인플루언서 확인: in.naver.com/{블로그ID}가 열리면 인플루언서로 '확인'한다.
+// 인플루언서 홈 ID가 블로그 ID와 다른 경우가 있어서, 열리지 않는다고 '아님'으로 단정하지 않는다.
+async function influencerHome(id) {
+  try {
+    const r = await fetch(`https://in.naver.com/${encodeURIComponent(id)}`, { redirect: 'follow', signal: AbortSignal.timeout(6000) });
+    return r.status === 200 && /in\.naver\.com/.test(r.url) ? `https://in.naver.com/${id}` : null;
+  } catch (_) { return null; }
+}
+
 async function load(id) {
-  const [info, list, pop] = await Promise.allSettled([
+  const [info, list, pop, infl] = await Promise.allSettled([
     getJson(`${BASE}${id}`, id),
     getJson(`${BASE}${id}/post-list?categoryNo=0&itemCount=30&page=1`, id),
     getJson(`${BASE}${id}/popular-post-list`, id),
+    influencerHome(id),
   ]);
   const out = { blogId: id, fetchedAt: new Date().toISOString(), profile: null, posts: [], popular: [], errors: [] };
   if (info.status === 'fulfilled') {
@@ -45,6 +55,7 @@ async function load(id) {
       citations: r.mateCitations ? { thisMonth: num(r.mateCitations.currentMonthCount), month: num(r.mateCitations.currentMonth),
         cumulative: num(r.mateCitations.cumulativeCount), period: num(r.mateCitations.selectionPeriodCount), periodMonth: num(r.mateCitations.selectionPeriodMonth) } : null,
       topic: r.blogDirectoryName || '',
+      influencerHome: infl.status === 'fulfilled' ? infl.value : null,
       coverImage: (r.mobileTitleImage && (r.mobileTitleImage.croppedImage || r.mobileTitleImage.originalImage)) || '',
       profileImage: r.profileImagePath || '',
     };
