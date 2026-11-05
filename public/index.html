@@ -280,7 +280,7 @@ async function loadExposure(b) {
   if (b.expo) return;
   b.expo = { status: 'loading' };
   try {
-    const r = await fetch('/api/exposure?id=' + encodeURIComponent(b.data.blogId));
+    const r = await fetch('/api/exposure?v=3&id=' + encodeURIComponent(b.data.blogId));
     const body = await r.json();
     b.expo = r.ok ? { status: 'ok', data: body, map: new Map(body.results.map((x) => [x.logNo, x])) }
       : { status: body.code === 'no_key' ? 'nokey' : 'error', message: body.error };

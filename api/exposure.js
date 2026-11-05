@@ -44,7 +44,8 @@ module.exports = async function handler(req, res) {
   if (!process.env.NAVER_CLIENT_ID || !process.env.NAVER_CLIENT_SECRET) {
     return send(503, { error: '검색 API 키가 아직 설정되지 않았어요.', code: 'no_key' });
   }
-  const hit = cache.get(id);
+  const key = id + ':' + VERSION;
+  const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return send(200, hit.data);
   try {
     const blog = await getBlog(id);
@@ -63,8 +64,8 @@ module.exports = async function handler(req, res) {
       const status = r.error ? 'error' : r.indexed ? 'shown' : ageH < PENDING_HOURS ? 'pending' : 'missing';
       return { logNo, title: p.title, pubDate: p.pubDate, status, ...r };
     });
-    const data = { blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, pendingHours: PENDING_HOURS, results };
-    cache.set(id, { at: Date.now(), data });
+    const data = { version: VERSION, blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, pendingHours: PENDING_HOURS, results };
+    cache.set(key, { at: Date.now(), data });
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=21600');
     send(200, data);
   } catch (e) {
