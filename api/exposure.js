@@ -10,7 +10,7 @@ const PENDING_HOURS = 48;  // 발행 후 이 시간 안이면 '미반영'으로 
 const CONCURRENCY = 5;
 const cache = new Map();
 const TTL_MS = 60 * 60 * 1000;
-const VERSION = 3; // 판정 방식이 바뀌면 올려서 CDN 캐시를 무효화
+const VERSION = 4; // 판정 방식이 바뀌면 올려서 CDN 캐시를 무효화
 
 const logNoOf = (url) => (String(url).match(/\/(\d{9,})(?:[/?#]|$)/) || [])[1] || (String(url).match(/logNo=(\d+)/) || [])[1] || '';
 
@@ -52,13 +52,12 @@ module.exports = async function handler(req, res) {
     const posts = [...blog.items].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, MAX_POSTS);
     const results = await pool(posts, CONCURRENCY, async (p) => {
       const logNo = logNoOf(p.link);
-      let r = await searchRank(p.title, id, logNo);
-      // 정확도순 30위 안에 없으면, 최신순 100개에서 한 번 더 찾는다 → 있으면 '검색엔 있지만 30위 밖'
+      // 제목을 큰따옴표로 감싸 '정확히 일치' 검색을 한다 (안쪽 큰따옴표는 지움)
+      const exact = '"' + p.title.replace(/["“”]/g, ' ').replace(/\s+/g, ' ').trim() + '"';
+      let r = await searchRank(exact, id, logNo);
+      // 정확도순 30위 안에 없으면, 같은 검색어로 최신순 100개에서 한 번 더 찾는다 → 있으면 '검색엔 있지만 30위 밖'
       let indexed = !!r.rank;
-      if (!r.rank && !r.error) {
-        const clean = p.title.replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
-        const d = await searchRank(clean || p.title, id, logNo, 'date', 100); indexed = !!d.rank; r.dateRank = d.rank;
-      }
+      if (!r.rank && !r.error) { const d = await searchRank(exact, id, logNo, 'date', 100); indexed = !!d.rank; r.dateRank = d.rank; }
       r.indexed = indexed;
       const ageH = (Date.now() - new Date(p.pubDate).getTime()) / 36e5;
       const status = r.error ? 'error' : r.indexed ? 'shown' : ageH < PENDING_HOURS ? 'pending' : 'missing';
