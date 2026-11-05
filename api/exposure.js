@@ -60,6 +60,10 @@ module.exports = async function handler(req, res) {
     return send(503, { error: '검색 API 키가 아직 설정되지 않았어요.', code: 'no_key' });
   }
   const key = id + ':' + VERSION;
+  // 예전 화면(한 번에 전부 요청)은 offset 없이 부른다 → 새로고침 안내
+  if (req.query.offset === undefined) {
+    return send(409, { error: '사이트가 업데이트됐어요. 새로고침(Ctrl+F5, Mac은 ⌘+Shift+R)하면 30개 모두 확인돼요.', code: 'outdated' });
+  }
   const offset = Math.max(0, Math.min(MAX_POSTS - 1, parseInt(req.query.offset, 10) || 0));
   const limit = Math.max(1, Math.min(BATCH_MAX, parseInt(req.query.limit, 10) || BATCH_MAX, MAX_POSTS - offset));
   const hit = cache.get(key + ':' + offset + ':' + limit);
