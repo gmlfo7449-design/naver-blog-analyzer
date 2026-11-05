@@ -226,6 +226,18 @@
   .popsum { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-bottom: 16px; font-size: 14px; color: var(--muted); }
   .popsum b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
+  .popmini .sum { display: flex; justify-content: space-between; align-items: baseline; background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+  .popmini .sum b { font-family: var(--num); font-stretch: 75%; font-size: 26px; color: var(--ink); font-weight: 700; }
+  .popmini ol { list-style: none; margin: 0; padding: 0; }
+  .popmini li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--rule); font-size: 13.5px; }
+  .popmini li:last-child { border-bottom: 0; }
+  .popmini .n { width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--surface); font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .popmini a { color: var(--ink); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .popmini a:hover { text-decoration: underline; }
+  .popmini .v { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
+  .popmini details { margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .popmini summary { cursor: pointer; padding: 4px 0; }
+
   /* 첫 화면: 결과 미리보기 */
   #intro { margin-top: 56px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
   @media (max-width: 860px) { #intro { grid-template-columns: 1fr; gap: 20px; } }
@@ -278,6 +290,10 @@
       <div class="scroll"><table id="cmpTable"></table></div>
       <div class="meta" id="cmpMeta"></div>
       <p class="hint hidden" id="cmpWeekHint" style="margin-top:8px">글을 자주 쓰는 블로그가 있어 최근 글 30개가 덮는 공통 기간이 4주가 안 돼요. 그래서 주차별 추이 차트는 숨기고, 발행 빈도는 위 표의 주 평균 발행과 발행 간격으로 비교합니다.</p>
+    </div>
+    <div class="card">
+      <h2>인기글 조회수 <small>네이버가 블로그마다 공개하는 인기글 10개의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</small></h2>
+      <div class="scroll"><div class="cols" id="cmpPop"></div></div>
     </div>
     <div class="card">
       <h2>방문자 비교 <small>오늘 방문자는 모든 블로그를, 날짜별 추이는 값이 있는 블로그만 보여줘요.</small></h2>
@@ -631,6 +647,21 @@ function renderPop(b) {
       ${p.slice(3).map((x, i) => `<tr><td class="num">${i + 4}</td><td><a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener">${esc(x.title)}</a></td><td class="num">${fmtN(x.views)}</td><td class="num">${fmtN(x.likes)}</td><td class="num">${fmtN(x.comments)}</td><td style="white-space:nowrap">${x.date ? fmtDate(x.date).slice(0, 10) : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
 }
 
+function renderCmpPop() {
+  const el = document.getElementById('cmpPop'); if (!el) return;
+  el.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(240px, 1fr))`;
+  const li = (b, x, i) => `<li><span class="n">${i + 1}</span><a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener" title="${esc(x.title)}">${esc(x.title)}</a><span class="v">${fmtN(x.views)}</span></li>`;
+  el.innerHTML = blogs.map((b, bi) => {
+    const head = `<h3>${dotOf(bi)}${roleTag(b)}${esc(nameOf(b))}</h3>`;
+    if (profLoading(b)) return `<div class="col popmini">${head}<p class="empty">불러오고 있어요.</p></div>`;
+    const p = popOf(b);
+    if (!p || !p.length) return `<div class="col popmini">${head}<p class="empty">인기글을 가져오지 못했어요.</p></div>`;
+    return `<div class="col popmini">${head}<div class="sum"><span>인기글 ${p.length}개 조회수 합</span><span><b>${fmtN(popSum(b))}</b> 회</span></div>
+      <ol>${p.slice(0, 3).map((x, i) => li(b, x, i)).join('')}</ol>
+      ${p.length > 3 ? `<details><summary>4~${p.length}위 보기</summary><ol>${p.slice(3).map((x, i) => li(b, x, i + 3)).join('')}</ol></details>` : ''}</div>`;
+  }).join('');
+}
+
 // ---- 방문자 추이 (비공식) ----
 async function loadVisitors(b) {
   if (b.vis) return;
@@ -728,7 +759,7 @@ async function loadProfile(b) {
   } catch (_) { b.prof = { status: 'error' }; }
   if (!blogs.includes(b)) return;
   if (blogs.length === 1) { renderMast(document.getElementById('mast'), b); renderKpis(b); renderPosts(); renderPop(b); if (b.vis && b.vis.status === 'ok') renderVisit(b); }
-  else { renderCompare(true); renderCmpPosts(); renderCmpVisit(); }
+  else { renderCompare(true); renderCmpPosts(); renderCmpVisit(); renderCmpPop(); }
 }
 const logNoOfItem = (it) => (it.link.match(/\/(\d{9,})/) || [])[1];
 const reactOf = (b, it) => (b.prof && b.prof.map ? b.prof.map.get(logNoOfItem(it)) : null);
@@ -842,7 +873,7 @@ function renderCompare(tableOnly) {
   renderCmpExpo();
   if (tableOnly) return;
   blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); });
-  renderCmpVisit();
+  renderCmpVisit(); renderCmpPop();
   document.getElementById('cmpMeta').innerHTML = blogs.map((b) => b.stats.n
     ? `${esc(nameOf(b))}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${esc(nameOf(b))}: 공개 글 없음`).join('<br>') + `<br>${fmtDate(blogs[0].data.fetchedAt)}에 분석`;
 
