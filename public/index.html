@@ -89,6 +89,13 @@
   .bar .pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
   .col .chips .chip { font-size: 12px; padding: 3px 8px; }
   .chip.shared { outline: 1px solid var(--accent); }
+  .plist { list-style: none; margin: 0; padding: 0; }
+  .plist li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .plist li:last-child { border-bottom: 0; }
+  .plist a { color: var(--text); font-size: 13px; line-height: 1.45; text-decoration: none; display: block; overflow-wrap: anywhere; }
+  .plist a:hover { text-decoration: underline; }
+  .plist .pm { font-size: 11px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .col h3 .cnt { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted); }
   @media (prefers-color-scheme: dark) { .pill.bad { background: #3a1714; color: #ff8a80; } }
 </style>
 </head>
@@ -126,11 +133,11 @@
     </div>
     <div class="card">
       <div class="row-actions">
-        <h2 style="margin:0">전체 게시물 <small>최신순</small></h2>
+        <h2 style="margin:0">게시물 <small>블로그별 최신순</small></h2>
         <input id="cmpFilter" type="text" placeholder="제목·태그·카테고리 검색" />
         <button class="ghost" id="cmpCsv" type="button">CSV 다운로드</button>
       </div>
-      <div class="scroll"><table id="cmpPosts"></table></div>
+      <div class="scroll"><div class="cols" id="cmpPosts"></div></div>
       <div style="text-align:center;margin-top:12px"><button class="ghost" id="cmpMore" type="button" hidden>더 보기</button></div>
     </div>
   </div>
@@ -424,23 +431,31 @@ function renderCompare() {
     return `<div class="col"><h3>${dotOf(i)}${esc(nameOf(b))}</h3><div class="sub2" style="margin-top:0">카테고리 TOP 5</div>${cats}<div class="sub2">태그 TOP 12</div><div class="chips">${tags}</div></div>`;
   }).join('');
 
-  cmpLimit = 30;
+  cmpLimit = 15;
   renderCmpPosts();
 }
 
 function allPosts() {
   return blogs.flatMap((b, i) => (b.stats.items || []).map((it) => ({ ...it, bi: i }))).sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 }
-let cmpLimit = 30;
+let cmpLimit = 15;
 function renderCmpPosts() {
   const q = document.getElementById('cmpFilter').value.trim().toLowerCase();
-  const all = allPosts().filter((i) => !q || (i.title + ' ' + i.tags.join(' ') + ' ' + i.category + ' ' + nameOf(blogs[i.bi])).toLowerCase().includes(q));
-  const rows = all.slice(0, cmpLimit);
+  const match = (i) => !q || (i.title + ' ' + i.tags.join(' ') + ' ' + i.category).toLowerCase().includes(q);
+  const lists = blogs.map((b) => (b.stats.items || []).filter(match));
+  const el = document.getElementById('cmpPosts');
+  el.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(220px, 1fr))`;
+  el.innerHTML = blogs.map((b, bi) => {
+    const list = lists[bi];
+    const items = list.slice(0, cmpLimit).map((i) => `<li><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>
+      <div class="pm">${fmtDate(i.pubDate)} · ${esc(i.category)} · 태그 ${i.tags.length}</div></li>`).join('');
+    return `<div class="col"><h3>${dotOf(bi)}${esc(nameOf(b))}<span class="cnt">${Math.min(cmpLimit, list.length)}/${list.length}</span></h3>
+      ${items ? `<ul class="plist">${items}</ul>` : '<span class="hint">해당하는 글이 없어요</span>'}</div>`;
+  }).join('');
   const more = document.getElementById('cmpMore');
-  more.hidden = all.length <= cmpLimit;
-  more.textContent = `더 보기 (${rows.length} / ${all.length}개)`;
-  document.getElementById('cmpPosts').innerHTML = `<thead><tr><th>발행일</th><th>블로그</th><th>제목</th><th>카테고리</th><th class="num">태그</th></tr></thead><tbody>` +
-    rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td style="white-space:nowrap">${dotOf(i.bi)}${esc(nameOf(blogs[i.bi]))}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num">${i.tags.length}</td></tr>`).join('') + '</tbody>';
+  const rest = Math.max(0, ...lists.map((l) => l.length - cmpLimit));
+  more.hidden = rest <= 0;
+  more.textContent = `블로그별 15개 더 보기`;
 }
 
 function downloadCsv(filename, rows) {
@@ -476,8 +491,8 @@ document.getElementById('csv').onclick = () => {
   downloadCsv(`${b.data.blogId}_posts.csv`, [['발행일(KST)', '제목', '카테고리', '태그', '태그수', 'URL'],
     ...b.stats.items.map((i) => [fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link])]);
 };
-document.getElementById('cmpFilter').oninput = () => { cmpLimit = 30; renderCmpPosts(); };
-document.getElementById('cmpMore').onclick = () => { cmpLimit += 50; renderCmpPosts(); };
+document.getElementById('cmpFilter').oninput = () => { cmpLimit = 15; renderCmpPosts(); };
+document.getElementById('cmpMore').onclick = () => { cmpLimit += 15; renderCmpPosts(); };
 document.getElementById('cmpCsv').onclick = () => {
   downloadCsv(`blog_compare_${blogs.map((b) => b.data.blogId).join('_')}.csv`, [['블로그', '발행일(KST)', '제목', '카테고리', '태그', '태그수', 'URL'],
     ...allPosts().map((i) => [nameOf(blogs[i.bi]), fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link])]);
