@@ -2,130 +2,188 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>블로그 발행 분석기</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,600..800&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" />
 <style>
+  /* 컨셉: 교정 데스크 — 블로그를 교정지처럼 검토한다. 섹션은 선과 여백으로 나누고, 박스는 블로그 칸에만 쓴다.
+     강조 한 가지: 이긴 값·핵심 숫자에 형광펜. 큰 숫자는 Archivo 압축체, 나머지는 IBM Plex Sans KR. */
   :root {
-    --bg: #f6f7f9; --card: #ffffff; --text: #1a1d21; --muted: #6b7280; --line: #e5e7eb;
-    --accent: #03a94d; --accent-soft: #e6f6ed; --warn: #b45309; --warn-soft: #fef3c7;
-    --s1: #03a94d; --s2: #2563eb; --s3: #e8710a; --s4: #9333ea; --s5: #db2777;
+    --bg: #f5f6f8; --surface: #ffffff; --ink: #14213d; --muted: #5b6475; --rule: #dfe3ea;
+    --hl: #ffe14d; --me: #2747c9; --c1: #d9731c; --c2: #7a8699;
+    --ok: #17804b; --wait: #b7791f; --miss: #c2362f;
+    --ok-soft: #e3f3ea; --wait-soft: #fbf0d9; --miss-soft: #fbe5e3;
+    --text: var(--ink); --card: var(--surface); --line: var(--rule);
+    --accent: var(--me); --accent-soft: #e6eafb; --warn: var(--wait); --warn-soft: var(--wait-soft);
+    --s1: var(--me); --s2: var(--c1); --s3: var(--c2); --s4: #8a4fd1; --s5: #c23a7a;
+    --font: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    --num: "Archivo", "IBM Plex Sans KR", sans-serif;
+    color-scheme: light;
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #111315; --card: #1a1d21; --text: #e8eaed; --muted: #9aa0a6; --line: #2c3036;
-      --accent: #2fd27a; --accent-soft: #163322; --warn: #fbbf24; --warn-soft: #3a2e0f;
-      --s1: #34d27f; --s2: #60a5fa; --s3: #fb923c; --s4: #c084fc; --s5: #f472b6; }
-  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #0f1420; --surface: #161c2a; --ink: #e8ecf4; --muted: #98a2b3; --rule: #273042;
+    --hl: #8a7414; --me: #7b93ff; --c1: #f29a4a; --c2: #a3adbd;
+    --ok: #4cc38a; --wait: #e5b454; --miss: #ff7a70;
+    --ok-soft: #12301f; --wait-soft: #33290f; --miss-soft: #3a1714; --accent-soft: #1e2748; color-scheme: dark; } }
+  :root[data-theme="dark"] {
+    --bg: #0f1420; --surface: #161c2a; --ink: #e8ecf4; --muted: #98a2b3; --rule: #273042;
+    --hl: #8a7414; --me: #7b93ff; --c1: #f29a4a; --c2: #a3adbd;
+    --ok: #4cc38a; --wait: #e5b454; --miss: #ff7a70;
+    --ok-soft: #12301f; --wait-soft: #33290f; --miss-soft: #3a1714; --accent-soft: #1e2748; color-scheme: dark; }
+
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
-  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
-  form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
-  .fields { flex: 1 1 520px; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); min-width: 0; }
-  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .field input { width: 100%; }
-  .flabel { font-size: 12px; color: var(--muted); font-weight: 600; }
-  .flabel.me { color: var(--accent); }
-  .role { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px; margin-right: 6px; background: var(--bg); color: var(--muted); vertical-align: 1px; }
-  .role.me { background: var(--accent-soft); color: var(--accent); }
-  .expoBtn { padding: 4px 10px; font-size: 12px; font-weight: 600; }
-  input[type=text] { flex: 1 1 320px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
-    background: var(--card); color: var(--text); font-size: 15px; }
-  button { padding: 12px 18px; border: 0; border-radius: 10px; background: var(--accent); color: #fff;
-    font-weight: 600; font-size: 15px; cursor: pointer; }
-  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 500; }
-  .hint { color: var(--muted); font-size: 13px; margin-top: 8px; }
-  .notice { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin: 16px 0; line-height: 1.5; }
-  .error { background: #fee2e2; color: #b91c1c; border-radius: 10px; padding: 10px 14px; margin-top: 12px; font-size: 14px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 16px; }
-  .card h2 { font-size: 16px; margin: 0 0 12px; }
-  .card h2 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
-  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-  .grid > .card { margin-top: 0; }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-  .kpi { background: var(--bg); border-radius: 10px; padding: 12px; }
-  .kpi .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .kpi .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .profile { display: flex; align-items: center; gap: 12px; }
-  .profile img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--bg); }
-  .profile a { color: var(--text); font-weight: 700; font-size: 18px; text-decoration: none; }
-  .profile p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
-  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 16px; }
-  .tab { padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-size: 14px; cursor: pointer; font-weight: 500; }
-  .tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 500; white-space: nowrap; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  td a { color: var(--text); }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 80px;
+    padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
+  a { color: inherit; }
+  :focus-visible { outline: 2px solid var(--me); outline-offset: 2px; }
+  .hidden { display: none !important; }
   .scroll { overflow-x: auto; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { background: var(--accent-soft); color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
-  .chip b { color: var(--accent); margin-left: 4px; font-weight: 600; }
-  .heat { min-width: 560px; display: grid; grid-template-columns: 28px repeat(24, 1fr); gap: 2px; font-size: 10px; }
-  .heat div { aspect-ratio: 1; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
-  .heat .lbl { color: var(--muted); aspect-ratio: auto; }
-  .chart-box { position: relative; height: 240px; }
-  .insights li { margin: 6px 0; line-height: 1.5; font-size: 14px; }
-  .row-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-  .row-actions input { flex: 1 1 200px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
-  .hidden { display: none; }
-  .meta { color: var(--muted); font-size: 13px; margin-top: 12px; }
-  .diag { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-  .diag > div { background: var(--bg); border-radius: 10px; padding: 12px; }
-  .diag .t { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
+
+  /* 머리 */
+  h1 { font-size: 26px; line-height: 1.25; margin: 0; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 6px 0 22px; max-width: 62ch; }
+
+  /* 입력: 내 블로그 대 경쟁 블로그 */
+  form { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 14px; }
+  .fields { display: contents; }
+  .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .flabel { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .flabel.me { color: var(--me); }
+  form input { width: 100%; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; }
+  form .field:first-child input { border: 1.5px solid var(--me); background: var(--surface); }
+  form input::placeholder { color: var(--muted); opacity: .8; }
+  button { font: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; }
+  form button[type=submit] { padding: 12px 22px; border: 0; background: var(--ink); color: var(--bg); height: 47px; }
+  form button[type=submit]:disabled { opacity: .6; cursor: progress; }
+  button.ghost { padding: 9px 14px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); font-weight: 500; }
+  button.ghost:hover { border-color: var(--muted); }
+  @media (max-width: 860px) { form { grid-template-columns: 1fr; } form button[type=submit] { width: 100%; } }
+  .hint { color: var(--muted); font-size: 13px; line-height: 1.5; }
+  form + .hint { margin-top: 10px; max-width: 80ch; }
+  .notice { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .notice b { color: var(--ink); font-weight: 600; }
+  .error { background: var(--miss-soft); color: var(--miss); border-radius: 10px; padding: 10px 14px; margin-top: 14px; font-size: 14px; }
+
+  /* 섹션: 박스 대신 굵은 머리선 */
+  .card { margin-top: 44px; min-width: 0; }
+  .card > h2, .row-actions h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; text-wrap: balance; }
+  .card > h2 { padding-top: 14px; border-top: 2px solid var(--ink); }
+  .card h2 small { display: block; color: var(--muted); font-weight: 400; font-size: 13px; margin-top: 4px; letter-spacing: 0; }
+  .card > h2 + * { margin-top: 18px; }
+  .grid { display: grid; gap: 32px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .grid > .card { margin-top: 44px; }
+  .row-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; padding-top: 14px; border-top: 2px solid var(--ink); }
+  .row-actions input { flex: 1 1 220px; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 14px; }
+  .chart-box { position: relative; height: 250px; }
+
+  /* 단일 블로그 머리 */
+  #result > .card:first-child { margin-top: 36px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 22px; }
+  .profile { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .profile img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; background: var(--bg); flex: none; }
+  .profile a { color: var(--ink); font-weight: 700; font-size: 21px; text-decoration: none; letter-spacing: -0.01em; }
+  .profile p { margin: 2px 0 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 0; margin-top: 20px; border-top: 1px solid var(--rule); }
+  .kpi { padding: 14px 14px 4px 0; }
+  .kpi .v { font-family: var(--num); font-stretch: 75%; font-weight: 700; font-size: 34px; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .kpi .l { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+
+  /* 제목 노출: 30칸 띠 */
+  .expo { display: grid; grid-template-columns: minmax(0, 230px) minmax(0, 1fr); gap: 28px; align-items: start; }
+  @media (max-width: 720px) { .expo { grid-template-columns: 1fr; } }
+  .expo .big { font-family: var(--num); font-stretch: 75%; font-weight: 800; font-size: 72px; line-height: .95; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .expo .big small { font-size: 30px; color: var(--muted); font-weight: 600; margin-left: 2px; }
+  .expo .big mark { background: linear-gradient(transparent 52%, var(--hl) 52%, var(--hl) 86%, transparent 86%); color: inherit; padding: 0 .06em; margin-left: -.06em; }
+  .sq { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; }
+  @media (max-width: 720px) { .sq { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
+  .sq span { height: 44px; border-radius: 3px; background: var(--rule); }
+  @media (max-width: 720px) { .sq span { height: 26px; } }
+  .sq-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .shown { background: var(--ok) !important; }
+  .pending { background: var(--wait) !important; }
+  .missing { background: var(--miss) !important; }
+  .rerr { background: var(--rule) !important; }
+  .lg { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); margin-top: 14px; }
+  .lg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  /* 상태 도장 */
+  .rk { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 1px 8px; border-radius: 4px; border: 1.5px solid currentColor; white-space: nowrap; background: transparent !important; }
+  .rk.shown { color: var(--ok); } .rk.pending { color: var(--wait); } .rk.missing { color: var(--miss); } .rk.rerr { color: var(--muted); }
+  .verify { font-size: 12.5px; color: var(--muted); white-space: nowrap; margin-left: 6px; }
+  .expoBtn { padding: 6px 12px; font-size: 13px; font-weight: 600; }
+
+  /* 진단 */
+  .diag { display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); border-top: 1px solid var(--rule); }
+  .diag > div { padding: 14px 16px 14px 0; border-bottom: 1px solid var(--rule); }
+  .diag .t { display: flex; justify-content: space-between; align-items: center; font-weight: 600; gap: 8px; }
   .diag .d { color: var(--muted); font-size: 13px; margin-top: 6px; line-height: 1.5; }
-  .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-  .pill.good { background: var(--accent-soft); color: var(--accent); }
-  .pill.mid { background: var(--warn-soft); color: var(--warn); }
-  .pill.bad { background: #fde8e8; color: #c62828; }
-  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: baseline; flex: none; }
-  #cmpTable th.num { text-align: right; }
-  #cmpTable td.best { font-weight: 700; color: var(--accent); }
-  #cmpTable tr.sec td { color: var(--muted); font-size: 12px; padding-top: 14px; border-bottom: 0; }
-  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; margin-bottom: 8px; }
-  .cols { display: grid; gap: 12px; }
-  .col { background: var(--bg); border-radius: 10px; padding: 12px; min-width: 0; }
-  .col h3 { font-size: 14px; margin: 0 0 10px; display: flex; align-items: center; overflow-wrap: anywhere; }
-  .col .sub2 { font-size: 12px; color: var(--muted); margin: 12px 0 6px; }
-  .bar { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 6px; align-items: center; font-size: 12px; margin: 4px 0; }
-  .bar .track { position: relative; height: 20px; border-radius: 4px; background: var(--card); overflow: hidden; }
-  .bar .fill { position: absolute; inset: 0 auto 0 0; opacity: .28; }
-  .bar .name { position: absolute; left: 6px; top: 2px; right: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
+  .pill.good { background: var(--ok-soft); color: var(--ok); }
+  .pill.mid { background: var(--wait-soft); color: var(--wait); }
+  .pill.bad { background: var(--miss-soft); color: var(--miss); }
+  .insights { margin: 0; padding-left: 18px; max-width: 78ch; }
+  .insights li { margin: 8px 0; line-height: 1.65; }
+  .insights b { font-weight: 700; }
+
+  /* 히트맵 */
+  .heat { min-width: 560px; display: grid; grid-template-columns: 28px repeat(24, 1fr); gap: 2px; font-size: 10px; font-variant-numeric: tabular-nums; }
+  .heat div { aspect-ratio: 1; border-radius: 2px; display: flex; align-items: center; justify-content: center; }
+  .heat .lbl { color: var(--muted); aspect-ratio: auto; }
+
+  /* 칩 */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: var(--surface); border: 1px solid var(--rule); color: var(--ink); border-radius: 6px; padding: 3px 9px; font-size: 13px; }
+  .chip b { color: var(--muted); margin-left: 5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chip.shared { border-color: var(--ink); }
+
+  /* 표 */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; white-space: nowrap; font-size: 13px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration: underline; }
+  #cmpTable thead th { vertical-align: bottom; color: var(--ink); font-weight: 700; font-size: 15px; padding-bottom: 12px; border-bottom: 2px solid var(--ink); }
+  #cmpTable thead th a { text-decoration: none; }
+  #cmpTable tr.sec td { color: var(--muted); font-size: 13px; font-weight: 600; padding-top: 22px; border-bottom: 1px solid var(--rule); }
+  mark.best { background: linear-gradient(transparent 52%, var(--hl) 52%); color: inherit; font-weight: 700; padding: 0 .2em; }
+
+  /* 블로그 칸 (비교) */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; margin-bottom: 10px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: baseline; flex: none; }
+  .role { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-right: 7px; background: var(--bg); color: var(--muted); border: 1px solid var(--rule); vertical-align: 1px; }
+  .role.me { background: var(--me); color: var(--surface); border-color: var(--me); }
+  .cols { display: grid; gap: 14px; }
+  .col { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 16px; min-width: 0; }
+  .col h3 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; overflow-wrap: anywhere; }
+  .col h3 .cnt { margin-left: auto; font-size: 12.5px; font-weight: 400; color: var(--muted); }
+  .col .sub2 { font-size: 12.5px; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
+  .bar { display: grid; grid-template-columns: minmax(0, 1fr) 42px; gap: 8px; align-items: center; font-size: 13px; margin: 5px 0; }
+  .bar .track { position: relative; height: 24px; border-radius: 4px; background: var(--bg); overflow: hidden; }
+  .bar .fill { position: absolute; inset: 0 auto 0 0; opacity: .22; }
+  .bar .name { position: absolute; left: 8px; top: 2px; right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar .pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
-  .col .chips .chip { font-size: 12px; padding: 3px 8px; }
-  .chip.shared { outline: 1px solid var(--accent); }
-  .expo { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 20px; align-items: start; }
-  @media (max-width: 640px) { .expo { grid-template-columns: 1fr; } }
-  .expo .big { font-size: 40px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.1; }
-  .expo .big small { font-size: 18px; color: var(--muted); font-weight: 600; }
-  .sq { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; max-width: 420px; }
-  .sq span { aspect-ratio: 1; border-radius: 4px; background: var(--bg); }
-  .shown { background: var(--accent) !important; }
-  .pending { background: #f5b83d !important; }
-  .missing { background: #e5484d !important; }
-  .rerr { background: var(--line) !important; }
-  .lg { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 10px; }
-  .lg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
-  .rk { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
-  .rk.shown, .rk.missing { color: #fff; } .rk.pending { color: #3d2a00; } .rk.rerr { color: var(--muted); }
-  .verify { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .plist { list-style: none; margin: 0; padding: 0; }
-  .plist li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .plist li { padding: 10px 0; border-bottom: 1px solid var(--rule); }
   .plist li:last-child { border-bottom: 0; }
-  .plist a { color: var(--text); font-size: 13px; line-height: 1.45; text-decoration: none; display: block; overflow-wrap: anywhere; }
+  .plist a { color: var(--ink); font-size: 14px; line-height: 1.45; text-decoration: none; display: block; overflow-wrap: anywhere; }
   .plist a:hover { text-decoration: underline; }
-  .plist .pm { font-size: 11px; color: var(--muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
-  .col h3 .cnt { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted); }
-  @media (prefers-color-scheme: dark) { .pill.bad { background: #3a1714; color: #ff8a80; } }
+  .plist .pm { font-size: 12px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+  /* 비교 화면 맨 위: 내 블로그 노출 */
+  #cmpExpoSec { margin-top: 36px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 22px; }
+  #cmpExpoSec > h2 { border-top: 0; padding-top: 0; }
+
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>블로그 발행 분석기</h1>
-  <p class="sub">네이버 블로그 RSS로 발행 주기·카테고리·태그·제목 패턴을 분석합니다.</p>
+  <p class="sub">내 블로그와 경쟁 블로그를 넣으면 최근 글 30개의 발행 주기와 제목 노출 상태를 나란히 비교합니다.</p>
 
   <form id="f">
     <div class="fields">
@@ -136,12 +194,16 @@
     <button type="submit">분석하기</button>
   </form>
   <div class="hint">블로그 주소를 그대로 붙여넣거나 아이디만 입력하세요. 제목 노출 확인은 내 블로그만 바로 진행하고, 경쟁 블로그는 버튼을 눌러 따로 확인합니다.</div>
-  <div class="notice"><b>최근 공개 글 30개</b>를 기준으로 분석합니다. 조회수·공감·댓글 수, 검색 순위, 본문 전체 글자 수는 RSS에 없어 분석할 수 없습니다.</div>
+  <div class="notice">조회수, 공감, 댓글 수는 공개 정보가 아니어서 분석에 넣지 않았습니다.</div>
   <div id="err" class="error hidden"></div>
 
   <div id="cmpView" class="hidden">
+    <section class="card" id="cmpExpoSec">
+      <h2>내 블로그 제목 노출 <small id="cmpExpoName"></small></h2>
+      <div id="cmpExpo"></div>
+    </section>
     <div class="card">
-      <h2>블로그 비교 <small>초록색 굵은 값이 해당 항목에서 가장 좋은 블로그입니다</small></h2>
+      <h2>블로그 비교 <small>형광펜이 칠해진 값이 그 항목에서 가장 좋은 블로그입니다</small></h2>
       <div class="scroll"><table id="cmpTable"></table></div>
       <div class="meta" id="cmpMeta"></div>
     </div>
@@ -341,26 +403,33 @@ function expoRankCell(b, item) {
   return x.status === 'shown' ? badge : `${badge} <a class="verify" href="${naverBlogSearch(item.title)}" target="_blank" rel="noopener" title="네이버 블로그 탭에서 이 제목을 검색해 직접 확인">직접 확인</a>`;
 }
 const naverBlogSearch = (title) => 'https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(title);
-function renderExpo() {
-  const b = blogs[current], el = document.getElementById('expo'); if (!b) return;
+function renderExpo(el = document.getElementById('expo'), b = blogs[current]) {
+  if (!b || !el) return;
+  const idx = blogs.indexOf(b);
   const e = b.expo;
   if (!e) { el.innerHTML = b.role === 'me' ? '<p class="hint">확인을 준비하고 있어요.</p>'
-    : `<p class="hint" style="margin:0 0 10px">경쟁 블로그는 버튼을 눌러야 확인해요. 글 30개를 검색하므로 API를 30회 사용합니다.</p><button type="button" class="ghost expoBtn" data-expo="${blogs.indexOf(b)}">제목 노출 확인하기</button>`; return; }
+    : `<p class="hint" style="margin:0 0 12px">경쟁 블로그는 버튼을 눌렀을 때만 확인해요. 글 30개를 검색하므로 검색 API를 30회 씁니다.</p><button type="button" class="ghost expoBtn" data-expo="${idx}">제목 노출 확인하기</button>`; return; }
   if (e.status !== 'ok' && e.status !== 'loading') { el.innerHTML = `<p class="hint">${esc(e.message || '확인하지 못했어요.')}</p>`; return; }
   const s = expoSummary(e.data);
   const loading = e.status === 'loading';
-  const head = loading ? `<div class="hint" style="margin-bottom:10px">최근 글 제목을 검색하는 중이에요 · <b>${e.done}/${e.total}</b>개 확인</div>` : '';
-  const retry = !loading && s.error ? `<button class="ghost" type="button" id="expoRetry" style="margin-top:10px;padding:6px 12px;font-size:13px">확인 실패 ${s.error}개 다시 확인</button>` : '';
-  el.innerHTML = head + `<div class="expo"><div><div class="hint">정상</div><div class="big">${s.shown}<small>/${s.n}건</small></div>
-    <div class="hint" style="margin-top:6px">정상 ${s.shown} · 반영중 ${s.pending} · 누락 ${s.missing}${s.error ? ` · 확인 실패 ${s.error}` : ''}</div>
-    ${e.data.checkedAt ? `<div class="hint" style="margin-top:6px">확인 시각 ${fmtDate(e.data.checkedAt)}</div>` : ''}${retry}</div>
-    <div><div class="sq">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)} · ${ST[x.status]}"></span>`).join('')}${'<span></span>'.repeat(Math.max(0, (e.total || 0) - e.data.results.length))}</div>
-    <div class="lg"><span><i class="shown"></i>정상: 검색에 나옴</span><span><i class="pending"></i>반영중: 발행 1시간 이내인데 아직 검색에 없음</span><span><i class="missing"></i>누락: 발행 1시간이 지났는데 검색에 없음</span></div>
-    <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. <b>정상은 확실하지만, 반영중·누락은 검색 API에서 못 찾았다는 뜻일 뿐이에요.</b> 검색 API는 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 아래 게시물 목록의 '직접 확인'으로 실제 화면을 확인해 주세요.</p></div></div>`;
+  const total = e.total || e.data.results.length;
+  const status = loading
+    ? `<p class="hint" style="margin:10px 0 0">제목을 하나씩 검색하고 있어요. ${e.done}/${total}개 확인</p>`
+    : `<p class="hint" style="margin:10px 0 0">반영중 ${s.pending}개, 누락 ${s.missing}개${s.error ? `, 확인 실패 ${s.error}개` : ''}</p>
+       ${e.data.checkedAt ? `<p class="hint" style="margin:2px 0 0">${fmtDate(e.data.checkedAt)} 확인</p>` : ''}
+       ${s.error ? `<button class="ghost" type="button" data-retry="${idx}" style="margin-top:12px;font-size:13px;padding:7px 12px">실패한 ${s.error}개 다시 확인</button>` : ''}`;
+  el.innerHTML = `<div class="expo"><div>
+      <div class="big"><mark>${s.shown}</mark><small>/${total}</small></div>
+      <p style="margin:8px 0 0;font-weight:600">검색에 정상 노출된 글</p>${status}</div>
+    <div><div class="sq" role="img" aria-label="최근 글 ${total}개의 노출 상태: 정상 ${s.shown}, 반영중 ${s.pending}, 누락 ${s.missing}">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)}: ${ST[x.status]}"></span>`).join('')}${'<span></span>'.repeat(Math.max(0, total - e.data.results.length))}</div>
+    <div class="sq-axis"><span>최신 글</span><span>${total}번째 글</span></div>
+    <div class="lg"><span><i class="shown"></i>정상: 검색에 나옴</span><span><i class="pending"></i>반영중: 발행 1시간 이내, 아직 검색에 없음</span><span><i class="missing"></i>누락: 발행 1시간이 지났는데 검색에 없음</span></div>
+    <p class="hint" style="margin-top:12px;max-width:72ch">정상은 확실하지만, 반영중과 누락은 검색 API가 찾지 못했다는 뜻이에요. API가 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 게시물 목록의 '직접 확인'으로 한 번 더 확인하세요.</p></div></div>`;
 }
 
 document.addEventListener('click', (ev) => {
-  if (ev.target && ev.target.id === 'expoRetry') { const b = blogs[current]; if (b) loadExposure(b, true); }
+  const rb = ev.target && ev.target.closest && ev.target.closest('[data-retry]');
+  if (rb) { const b = blogs[+rb.dataset.retry]; if (b) loadExposure(b, true); }
   const eb = ev.target && ev.target.closest && ev.target.closest('[data-expo]');
   if (eb) { const b = blogs[+eb.dataset.expo]; if (b) loadExposure(b); }
 });
@@ -456,13 +525,21 @@ function renderPosts() {
 }
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const colorOf = (i) => css('--s' + (i % 5 + 1));
+const colorOf = (i) => { const r = blogs[i] && blogs[i].role; return css(r ? '--' + r : '--s' + (i % 5 + 1)); };
 const nameOf = (b) => b.data.channel.title || b.data.blogId;
 const ROLE = { me: '내 블로그', c1: '경쟁 1', c2: '경쟁 2' };
 const roleTag = (b) => b.role ? `<span class="role ${b.role === 'me' ? 'me' : ''}">${ROLE[b.role]}</span>` : '';
 const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
 const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
 
+function renderCmpExpo() {
+  const me = blogs.find((b) => b.role === 'me');
+  const sec = document.getElementById('cmpExpoSec');
+  sec.classList.toggle('hidden', !me);
+  if (!me) return;
+  document.getElementById('cmpExpoName').textContent = `${nameOf(me)}의 최근 글 30개 제목을 블로그 검색에 넣어, 내 글이 나오는지 확인합니다.`;
+  renderExpo(document.getElementById('cmpExpo'), me);
+}
 function renderCompare(tableOnly) {
   const view = document.getElementById('cmpView');
   view.classList.toggle('hidden', blogs.length < 2);
@@ -494,14 +571,15 @@ function renderCompare(tableOnly) {
       const vals = blogs.map((b) => { const e = b.expo; if (!e) return b.role === 'me' ? null : { ask: blogs.indexOf(b) }; if (e.status === 'loading') return { loading: `${e.done}/${e.total}` }; if (e.status !== 'ok') return -1; const sm = expoSummary(e.data); return { v: sm[f], n: sm.n }; });
       const nums = vals.filter((v) => v && v !== -1 && !v.loading && v.ask === undefined).map((v) => v.v);
       const best = f === 'pending' || new Set(nums).size < 2 ? null : f === 'shown' ? Math.max(...nums) : Math.min(...nums);
-      return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${v && v !== -1 && !v.loading && v.ask === undefined && v.v === best ? ' best' : ''}">${v === null ? '<span class="hint">확인 중…</span>' : v.ask !== undefined ? (f === 'shown' ? `<button type="button" class="ghost expoBtn" data-expo="${v.ask}">노출 확인하기</button>` : '<span class="hint">-</span>') : v.loading ? `<span class="hint">확인 중 ${v.loading}</span>` : v === -1 ? '<span class="hint">-</span>' : `${v.v}/${v.n}`}</td>`).join('')}</tr>`;
+      return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${v && v !== -1 && !v.loading && v.ask === undefined && v.v === best ? ' best' : ''}">${v === null ? '<span class="hint">확인 중…</span>' : v.ask !== undefined ? (f === 'shown' ? `<button type="button" class="ghost expoBtn" data-expo="${v.ask}">노출 확인하기</button>` : '<span class="hint">-</span>') : v.loading ? `<span class="hint">확인 중 ${v.loading}</span>` : v === -1 ? '<span class="hint">-</span>' : (v.v === best ? `<mark class="best">${v.v}/${v.n}</mark>` : `${v.v}/${v.n}`)}</td>`).join('')}</tr>`;
     }
     const vals = blogs.map((b) => (b.stats.n ? f(b.stats) : null));
     let best = null;
     if (dir) { const nums = vals.filter((v) => typeof v === 'number'); if (new Set(nums).size > 1) best = dir === 'hi' ? Math.max(...nums) : Math.min(...nums); }
-    return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${best !== null && v === best ? ' best' : ''}">${v ?? '-'}</td>`).join('')}</tr>`;
+    return `<tr><td>${label}</td>${vals.map((v) => `<td class="num">${best !== null && v === best ? `<mark class="best">${v}</mark>` : (v ?? '-')}</td>`).join('')}</tr>`;
   }).join('');
   document.getElementById('cmpTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+  renderCmpExpo();
   if (tableOnly) return;
   blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); });
   document.getElementById('cmpMeta').textContent = blogs.map((b) => b.stats.n
