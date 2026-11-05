@@ -90,3 +90,5 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.parseRss = parseRss;
+module.exports.getBlog = getBlog;
+module.exports.ID_RE = ID_RE;

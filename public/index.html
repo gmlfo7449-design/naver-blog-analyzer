@@ -89,6 +89,21 @@
   .bar .pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
   .col .chips .chip { font-size: 12px; padding: 3px 8px; }
   .chip.shared { outline: 1px solid var(--accent); }
+  .expo { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 640px) { .expo { grid-template-columns: 1fr; } }
+  .expo .big { font-size: 40px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .expo .big small { font-size: 18px; color: var(--muted); font-weight: 600; }
+  .sq { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; max-width: 420px; }
+  .sq span { aspect-ratio: 1; border-radius: 4px; background: var(--bg); }
+  .r1 { background: var(--accent) !important; }
+  .r10 { background: color-mix(in srgb, var(--accent) 55%, transparent) !important; }
+  .r100 { background: color-mix(in srgb, var(--accent) 22%, transparent) !important; }
+  .rout { background: #e5484d !important; }
+  .rerr { background: var(--line) !important; }
+  .lg { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .lg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .rk { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .rk.r1 { color: #fff; } .rk.r10, .rk.r100 { color: var(--text); } .rk.rout { color: #fff; } .rk.rerr { color: var(--muted); }
   .plist { list-style: none; margin: 0; padding: 0; }
   .plist li { padding: 8px 0; border-bottom: 1px solid var(--line); }
   .plist li:last-child { border-bottom: 0; }
@@ -146,6 +161,10 @@
       <div class="profile" id="profile"></div>
       <div class="kpis" id="kpis" style="margin-top:16px"></div>
       <div class="meta" id="meta"></div>
+    </div>
+    <div class="card" id="expoCard">
+      <h2>제목 노출 <small>최근 글 30개 제목으로 블로그 검색을 해서 그 글이 몇 위에 나오는지 확인합니다 (네이버 검색 API 기준)</small></h2>
+      <div id="expo"></div>
     </div>
     <div class="card">
       <h2>운영 진단 <small>이 도구가 정한 참고 기준이며, 노출·성과와의 관계는 검증되지 않았습니다</small></h2>
@@ -250,6 +269,47 @@ function analyze(data) {
   return s;
 }
 
+// ---- 제목 노출 (검색 API) ----
+const RK = (r) => r === 1 ? ['r1', '1위'] : r && r <= 10 ? ['r10', r + '위'] : r ? ['r100', r + '위'] : ['rout', '100위 밖'];
+function expoSummary(e) {
+  const ok = e.results.filter((x) => !x.error);
+  const c = { r1: 0, r10: 0, r100: 0, rout: 0 };
+  ok.forEach((x) => c[RK(x.rank)[0]]++);
+  return { n: ok.length, shown: ok.length - c.rout, top10: c.r1 + c.r10, ...c, err: e.results.length - ok.length };
+}
+async function loadExposure(b) {
+  if (b.expo) return;
+  b.expo = { status: 'loading' };
+  try {
+    const r = await fetch('/api/exposure?id=' + encodeURIComponent(b.data.blogId));
+    const body = await r.json();
+    b.expo = r.ok ? { status: 'ok', data: body, map: new Map(body.results.map((x) => [x.logNo, x])) }
+      : { status: body.code === 'no_key' ? 'nokey' : 'error', message: body.error };
+  } catch (_) { b.expo = { status: 'error', message: '네트워크 오류로 확인하지 못했어요.' }; }
+  if (blogs.includes(b)) { if (blogs.length === 1) { renderExpo(); renderPosts(); } else renderCompare(true); }
+}
+function expoRankCell(b, item) {
+  if (!b.expo || b.expo.status !== 'ok') return '';
+  const logNo = (item.link.match(/\/(\d{9,})/) || [])[1];
+  const x = b.expo.map.get(logNo);
+  if (!x) return '<span class="hint">-</span>';
+  if (x.error) return '<span class="rk rerr">확인 실패</span>';
+  const [cls, label] = RK(x.rank); return `<span class="rk ${cls}">${label}</span>`;
+}
+function renderExpo() {
+  const b = blogs[current], el = document.getElementById('expo'); if (!b) return;
+  const e = b.expo;
+  if (!e || e.status === 'loading') { el.innerHTML = '<p class="hint">최근 글 제목을 하나씩 검색하는 중이에요. 10초 정도 걸려요.</p>'; return; }
+  if (e.status !== 'ok') { el.innerHTML = `<p class="hint">${esc(e.message || '확인하지 못했어요.')}</p>`; return; }
+  const s = expoSummary(e.data);
+  el.innerHTML = `<div class="expo"><div><div class="hint">검색 결과 100위 안 노출</div><div class="big">${s.shown}<small>/${s.n}건</small></div>
+    <div class="hint" style="margin-top:6px">1위 ${s.r1} · 2~10위 ${s.r10} · 11~100위 ${s.r100} · 100위 밖 ${s.rout}${s.err ? ` · 확인 실패 ${s.err}` : ''}</div>
+    <div class="hint" style="margin-top:6px">확인 시각 ${fmtDate(e.data.checkedAt)}</div></div>
+    <div><div class="sq">${e.data.results.map((x) => `<span class="${x.error ? 'rerr' : RK(x.rank)[0]}" title="${esc(x.title)} · ${x.error ? '확인 실패' : RK(x.rank)[1]}"></span>`).join('')}</div>
+    <div class="lg"><span><i class="r1"></i>1위</span><span><i class="r10"></i>2~10위</span><span><i class="r100"></i>11~100위</span><span><i class="rout"></i>100위 밖</span></div>
+    <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. 100위 밖이라고 해서 검색에서 빠졌다(누락)고 단정할 수는 없어요. 검색 API 결과는 실제 블로그탭 화면과 다를 수 있습니다.</p></div></div>`;
+}
+
 function diagnose(s) {
   if (!s.n) return [];
   const g = (v, good, mid, hi = true) => hi ? (v >= good ? 'good' : v >= mid ? 'mid' : 'bad') : (v <= good ? 'good' : v <= mid ? 'mid' : 'bad');
@@ -296,6 +356,7 @@ function render() {
   ];
   document.getElementById('kpis').innerHTML = k.map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
   document.getElementById('insights').innerHTML = insights(s).map((t) => `<li>${t}</li>`).join('');
+  renderExpo(); loadExposure(blogs[current]);
   const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
   document.getElementById('diag').innerHTML = diagnose(s).map(([t, lv, v, c]) =>
     `<div><div class="t">${t}<span class="pill ${lv === 'info' ? 'mid' : lv}">${L[lv]}</span></div><div class="d">${esc(v)}<br>${c}</div></div>`).join('');
@@ -334,8 +395,9 @@ function renderPosts() {
   const s = blogs[current].stats;
   const q = document.getElementById('filter').value.trim().toLowerCase();
   const rows = (s.items || []).filter((i) => !q || (i.title + ' ' + i.tags.join(' ') + ' ' + i.category).toLowerCase().includes(q));
-  document.getElementById('posts').innerHTML = `<thead><tr><th>발행일</th><th>제목</th><th>카테고리</th><th class="num">태그</th></tr></thead><tbody>` +
-    rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num">${i.tags.length}</td></tr>`).join('') + '</tbody>';
+  const b = blogs[current];
+  document.getElementById('posts').innerHTML = `<thead><tr><th>발행일</th><th>노출</th><th>제목</th><th>카테고리</th><th class="num">태그</th></tr></thead><tbody>` +
+    rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td>${expoRankCell(b, i)}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num">${i.tags.length}</td></tr>`).join('') + '</tbody>';
 }
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -344,7 +406,7 @@ const nameOf = (b) => b.data.channel.title || b.data.blogId;
 const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
 const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
 
-function renderCompare() {
+function renderCompare(tableOnly) {
   const view = document.getElementById('cmpView');
   view.classList.toggle('hidden', blogs.length < 2);
   if (blogs.length < 2) return;
@@ -363,18 +425,27 @@ function renderCompare() {
     ['카테고리 수', (s) => s.cats.size], ['최다 카테고리', (s) => { const [c] = topN(s.cats, 1); return `${esc(c[0])} ${Math.round(c[1] / s.n * 100)}%`; }],
     ['글당 평균 태그', (s) => s.avgTags, 'hi'], ['태그 없는 글', (s) => s.noTag, 'lo'], ['제목 평균 길이(자)', (s) => s.avgTitle],
     ['대표 이미지 포함률', (s) => s.thumbRate + '%'],
+    ['sec', '제목 노출 (최근 글 30개, 검색 API 기준)'],
+    ['100위 안 노출', 'EXPO_SHOWN'], ['10위 안 노출', 'EXPO_TOP10'],
     ['sec', '운영 진단 (참고 기준)'],
     ...['발행량', '꾸준함', '최근 활동', '태그 활용'].map((label, k) => [label, (s) => { const d = diagnose(s)[k]; return `<span class="pill ${d[1]}">${L[d[1]]}</span>`; }]),
   ];
   const head = `<thead><tr><th></th>${blogs.map((b, i) => `<th class="num">${dotOf(i)}<a href="${esc(b.data.channel.link || 'https://blog.naver.com/' + b.data.blogId)}" target="_blank" rel="noopener" style="color:inherit">${esc(nameOf(b))}</a></th>`).join('')}</tr></thead>`;
   const body = rows.map(([label, f, dir]) => {
     if (label === 'sec') return `<tr class="sec"><td colspan="${blogs.length + 1}">${f}</td></tr>`;
+    if (typeof f === 'string') {
+      const vals = blogs.map((b) => { const e = b.expo; if (!e || e.status === 'loading') return null; if (e.status !== 'ok') return -1; const sm = expoSummary(e.data); return { v: f === 'EXPO_SHOWN' ? sm.shown : sm.top10, n: sm.n }; });
+      const nums = vals.filter((v) => v && v !== -1).map((v) => v.v), best = new Set(nums).size > 1 ? Math.max(...nums) : null;
+      return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${v && v !== -1 && v.v === best ? ' best' : ''}">${v === null ? '<span class="hint">확인 중…</span>' : v === -1 ? '<span class="hint">-</span>' : `${v.v}/${v.n}`}</td>`).join('')}</tr>`;
+    }
     const vals = blogs.map((b) => (b.stats.n ? f(b.stats) : null));
     let best = null;
     if (dir) { const nums = vals.filter((v) => typeof v === 'number'); if (new Set(nums).size > 1) best = dir === 'hi' ? Math.max(...nums) : Math.min(...nums); }
     return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${best !== null && v === best ? ' best' : ''}">${v ?? '-'}</td>`).join('')}</tr>`;
   }).join('');
   document.getElementById('cmpTable').innerHTML = head + '<tbody>' + body + '</tbody>';
+  if (tableOnly) return;
+  blogs.forEach((b) => loadExposure(b));
   document.getElementById('cmpMeta').textContent = blogs.map((b) => b.stats.n
     ? `${nameOf(b)}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${nameOf(b)}: 공개 글 없음`).join(' · ') + ` · 분석 시각 ${fmtDate(blogs[0].data.fetchedAt)}`;
 

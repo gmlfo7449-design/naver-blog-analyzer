@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const rss = require('./api/rss');
+const exposure = require('./api/exposure');
 
 const PORT = process.env.PORT || 3000;
 
@@ -11,6 +12,10 @@ http.createServer(async (req, res) => {
   if (url.pathname === '/api/rss') {
     req.query = Object.fromEntries(url.searchParams);
     return rss(req, res);
+  }
+  if (url.pathname === '/api/exposure') {
+    req.query = Object.fromEntries(url.searchParams);
+    return exposure(req, res);
   }
   const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
   const full = path.join(__dirname, 'public', path.normalize(file).replace(/^(\.\.[/\\])+/, ''));
