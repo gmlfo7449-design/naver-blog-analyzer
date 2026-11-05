@@ -13,7 +13,7 @@
      강조 한 가지: 이긴 값·핵심 숫자에 형광펜. 큰 숫자는 Archivo 압축체, 나머지는 IBM Plex Sans KR. */
   :root {
     --bg: #f5f6f8; --surface: #ffffff; --ink: #14213d; --muted: #5b6475; --rule: #dfe3ea;
-    --hl: #ffe14d; --hl-strong: #e8b400; --me: #2747c9; --c1: #d9731c; --c2: #7a8699;
+    --hl: #ffe14d; --hl-strong: #e8b400; --me: #2747c9; --c1: #d9731c; --c2: #8b3fd9;
     --ok: #17804b; --wait: #b7791f; --miss: #c2362f;
     --ok-soft: #e3f3ea; --wait-soft: #fbf0d9; --miss-soft: #fbe5e3;
     --text: var(--ink); --card: var(--surface); --line: var(--rule);
@@ -25,12 +25,12 @@
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
     --bg: #0f1420; --surface: #161c2a; --ink: #e8ecf4; --muted: #98a2b3; --rule: #273042;
-    --hl: #8a7414; --me: #7b93ff; --c1: #f29a4a; --c2: #a3adbd;
+    --hl: #8a7414; --me: #7b93ff; --c1: #f29a4a; --c2: #c39bff;
     --ok: #4cc38a; --wait: #e5b454; --miss: #ff7a70;
     --ok-soft: #12301f; --wait-soft: #33290f; --miss-soft: #3a1714; --accent-soft: #1e2748; color-scheme: dark; } }
   :root[data-theme="dark"] {
     --bg: #0f1420; --surface: #161c2a; --ink: #e8ecf4; --muted: #98a2b3; --rule: #273042;
-    --hl: #8a7414; --me: #7b93ff; --c1: #f29a4a; --c2: #a3adbd;
+    --hl: #8a7414; --me: #7b93ff; --c1: #f29a4a; --c2: #c39bff;
     --ok: #4cc38a; --wait: #e5b454; --miss: #ff7a70;
     --ok-soft: #12301f; --wait-soft: #33290f; --miss-soft: #3a1714; --accent-soft: #1e2748; color-scheme: dark; }
 
@@ -154,9 +154,14 @@
   .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; margin-bottom: 10px; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: baseline; flex: none; }
   .role { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-right: 7px; background: var(--bg); color: var(--muted); border: 1px solid var(--rule); vertical-align: 1px; }
-  .role.me { background: var(--me); color: var(--surface); border-color: var(--me); }
+  .role.me { background: var(--me); color: #fff; border-color: var(--me); }
+  .role.c1 { background: var(--c1); color: #fff; border-color: var(--c1); }
+  .role.c2 { background: var(--c2); color: #fff; border-color: var(--c2); }
   .cols { display: grid; gap: 14px; }
-  .col { background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; padding: 16px; min-width: 0; }
+  .col { background: var(--surface); border: 1px solid var(--rule); border-top: 4px solid var(--rc, var(--rule)); border-radius: 12px; padding: 16px; min-width: 0; }
+  .rc-me { --rc: var(--me); } .rc-c1 { --rc: var(--c1); } .rc-c2 { --rc: var(--c2); }
+  #cmpTable col.rc-me, #cmpTable col.rc-c1, #cmpTable col.rc-c2 { background: color-mix(in srgb, var(--rc) 7%, transparent); }
+  #cmpTable thead th.rc-me, #cmpTable thead th.rc-c1, #cmpTable thead th.rc-c2 { border-bottom: 3px solid var(--rc); }
   .col h3 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; overflow-wrap: anywhere; }
   .col h3 .cnt { margin-left: auto; font-size: 12.5px; font-weight: 400; color: var(--muted); }
   .col .sub2 { font-size: 12.5px; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
@@ -226,6 +231,14 @@
   .popsum { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-bottom: 16px; font-size: 14px; color: var(--muted); }
   .popsum b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
+  .acc { margin-top: 22px; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
+  .acc > summary { cursor: pointer; padding: 14px 16px; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 10px; }
+  .acc > summary::-webkit-details-marker { display: none; }
+  .acc > summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; flex: none; }
+  .acc[open] > summary::before { transform: rotate(45deg); }
+  .acc > summary .hint { font-weight: 400; }
+  .acc[open] > :not(summary) { margin: 0 16px; }
+  .acc[open] .chart-box { margin-bottom: 16px; }
   .popmini .sum { display: flex; justify-content: space-between; align-items: baseline; background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
   .popmini .sum b { font-family: var(--num); font-stretch: 75%; font-size: 26px; color: var(--ink); font-weight: 700; }
   .popmini ol { list-style: none; margin: 0; padding: 0; }
@@ -292,7 +305,7 @@
       <p class="hint hidden" id="cmpWeekHint" style="margin-top:8px">글을 자주 쓰는 블로그가 있어 최근 글 30개가 덮는 공통 기간이 4주가 안 돼요. 그래서 주차별 추이 차트는 숨기고, 발행 빈도는 위 표의 주 평균 발행과 발행 간격으로 비교합니다.</p>
     </div>
     <div class="card">
-      <h2>인기글 조회수 <small>네이버가 블로그마다 공개하는 인기글 10개의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</small></h2>
+      <h2>지난주 인기글 조회수 <small>네이버가 블로그마다 공개하는 인기글 10개의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</small></h2>
       <div class="scroll"><div class="cols" id="cmpPop"></div></div>
     </div>
     <div class="card">
@@ -337,7 +350,7 @@
       <div id="visit"></div>
     </div>
     <div class="card">
-      <h2>인기글 조회수 <small>네이버가 블로그에 공개하는 인기글(최대 10개)의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</small></h2>
+      <h2>지난주 인기글 조회수 <small>네이버가 블로그에 공개하는 인기글(최대 10개)의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</small></h2>
       <div id="pop"></div>
     </div>
     <div class="card">
@@ -625,7 +638,8 @@ const css = (name) => getComputedStyle(document.documentElement).getPropertyValu
 const colorOf = (i) => { const r = blogs[i] && blogs[i].role; return css(r ? '--' + r : '--s' + (i % 5 + 1)); };
 const nameOf = (b) => b.data.channel.title || b.data.blogId;
 const ROLE = { me: '내 블로그', c1: '경쟁 1', c2: '경쟁 2' };
-const roleTag = (b) => b.role ? `<span class="role ${b.role === 'me' ? 'me' : ''}">${ROLE[b.role]}</span>` : '';
+const rc = (b) => (b && b.role ? ' rc-' + b.role : '');
+const roleTag = (b) => b.role ? `<span class="role ${b.role}">${ROLE[b.role]}</span>` : '';
 const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
 const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
 
@@ -639,7 +653,7 @@ function renderPop(b) {
   const p = popOf(b);
   if (!p || !p.length) { el.innerHTML = '<p class="empty">네이버에서 이 블로그의 인기글을 가져오지 못했어요. 인기글을 공개하지 않은 블로그일 수 있어요.</p>'; return; }
   const sum = popSum(b), top = p.slice(0, 3);
-  el.innerHTML = `<div class="popsum"><span>인기글 ${p.length}개 조회수 합 <b>${fmtN(sum)}회</b></span><span>1위 <b>${fmtN(p[0].views)}회</b></span></div>
+  el.innerHTML = `<div class="popsum"><span>지난주 인기글 ${p.length}개 조회수 합 <b>${fmtN(sum)}회</b></span><span>1위 <b>${fmtN(p[0].views)}회</b></span></div>
     <div class="top3">${top.map((x, i) => `<a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener">
       <div class="th"${x.thumbnail ? ` style="background-image:url('${esc(x.thumbnail)}')"` : ''}><span class="rank">${i + 1}위</span></div>
       <div class="bd"><div class="tt">${esc(x.title)}</div><div class="vw"><span><b>${fmtN(x.views)}</b>조회</span><span>${x.date ? fmtDate(x.date).slice(0, 10) : ''}</span></div></div></a>`).join('')}</div>
@@ -653,10 +667,10 @@ function renderCmpPop() {
   const li = (b, x, i) => `<li><span class="n">${i + 1}</span><a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener" title="${esc(x.title)}">${esc(x.title)}</a><span class="v">${fmtN(x.views)}</span></li>`;
   el.innerHTML = blogs.map((b, bi) => {
     const head = `<h3>${dotOf(bi)}${roleTag(b)}${esc(nameOf(b))}</h3>`;
-    if (profLoading(b)) return `<div class="col popmini">${head}<p class="empty">불러오고 있어요.</p></div>`;
+    if (profLoading(b)) return `<div class="col popmini${rc(b)}">${head}<p class="empty">불러오고 있어요.</p></div>`;
     const p = popOf(b);
-    if (!p || !p.length) return `<div class="col popmini">${head}<p class="empty">인기글을 가져오지 못했어요.</p></div>`;
-    return `<div class="col popmini">${head}<div class="sum"><span>인기글 ${p.length}개 조회수 합</span><span><b>${fmtN(popSum(b))}</b> 회</span></div>
+    if (!p || !p.length) return `<div class="col popmini${rc(b)}">${head}<p class="empty">인기글을 가져오지 못했어요.</p></div>`;
+    return `<div class="col popmini${rc(b)}">${head}<div class="sum"><span>지난주 인기글 ${p.length}개 조회수 합</span><span><b>${fmtN(popSum(b))}</b> 회</span></div>
       <ol>${p.slice(0, 3).map((x, i) => li(b, x, i)).join('')}</ol>
       ${p.length > 3 ? `<details><summary>4~${p.length}위 보기</summary><ol>${p.slice(3).map((x, i) => li(b, x, i + 3)).join('')}</ol></details>` : ''}</div>`;
   }).join('');
@@ -732,11 +746,22 @@ function renderCmpVisit() {
   let trend;
   if (loadingDays) trend = '<p class="empty">날짜별 방문자 수를 불러오고 있어요.</p>';
   else if (!withData.length) trend = '';
-  else trend = `<div class="sub2" style="margin:26px 0 10px;font-weight:600;color:var(--ink)">날짜별 방문자</div><div class="legend">${withData.map((x) => `<span>${dotOf(blogs.indexOf(x.b))}${esc(nameOf(x.b))}</span>`).join('')}</div>
+  else {
+    const body = `<div class="legend">${withData.map((x) => `<span>${dotOf(blogs.indexOf(x.b))}${esc(nameOf(x.b))}</span>`).join('')}</div>
     <div class="chart-box" style="height:240px"><canvas id="cCmpVisit" aria-label="블로그별 날짜별 방문자 수 선 차트"></canvas></div>`;
+    // 날짜별 값이 한 블로그뿐이면 비교가 안 되므로 접어 둔다
+    trend = withData.length === 1
+      ? `<details class="acc" id="cmpVisitAcc"><summary>날짜별 방문자 <span class="hint">${esc(nameOf(withData[0].b))}만 공개돼 있어요</span></summary>${body}</details>`
+      : `<div class="sub2" style="margin:26px 0 10px;font-weight:600;color:var(--ink)">날짜별 방문자</div>${body}`;
+  }
   el.innerHTML = todayHtml + trend + (loadingDays ? '' : why);
   if (cmpVisitChart) { cmpVisitChart.destroy(); cmpVisitChart = null; }
   if (loadingDays || !withData.length) return;
+  const acc = document.getElementById('cmpVisitAcc');
+  if (acc && !acc.open) { acc.addEventListener('toggle', () => { if (acc.open && !cmpVisitChart) drawCmpVisit(withData); }); return; }
+  drawCmpVisit(withData);
+}
+function drawCmpVisit(withData) {
   const dates = [...new Set(withData.flatMap((x) => x.days.map((d) => d.date)))].sort();
   cmpVisitChart = new Chart(document.getElementById('cCmpVisit'), {
     type: 'line',
@@ -811,7 +836,7 @@ function renderKpis(b) {
     [rs && rs.likes != null ? `${rs.likes}<small>개</small>` : wait, '글당 평균 공감', rs && rs.comments != null ? `댓글은 평균 ${rs.comments}개` : ''],
   ];
   const ps = popSum(b);
-  k.push([ps != null ? `${fmtN(ps)}<small>회</small>` : wait, '인기글 조회수 합', ps != null ? `인기글 ${popOf(b).length}개 기준` : '']);
+  k.push([ps != null ? `${fmtN(ps)}<small>회</small>` : wait, '지난주 인기글 조회수 합', ps != null ? `인기글 ${popOf(b).length}개 기준` : '']);
   document.getElementById('kpis').innerHTML = k.map(([v, l, n]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div>${n ? `<div class="n">${n}</div>` : ''}</div>`).join('');
 }
 
@@ -849,13 +874,13 @@ function renderCompare(tableOnly) {
     ['sec', '규모와 반응'],
     ['이웃 수', (s, b) => PV(b, 'neighbors'), 'hi'], ['누적 방문자', (s, b) => PV(b, 'totalVisitors'), 'hi'], ['오늘 방문자', (s, b) => PV(b, 'todayVisitors'), 'hi'],
     ['글당 평균 공감', (s, b) => RV(b, 'likes'), 'hi'], ['글당 평균 댓글', (s, b) => RV(b, 'comments'), 'hi'],
-    ['인기글 10개 조회수 합', (s, b) => (profLoading(b) ? '…' : popSum(b)), 'hi'], ['인기글 1위 조회수', (s, b) => { if (profLoading(b)) return '…'; const p = popOf(b); return p && p[0] ? p[0].views : null; }, 'hi'],
+    ['지난주 인기글 10개 조회수 합', (s, b) => (profLoading(b) ? '…' : popSum(b)), 'hi'], ['지난주 인기글 1위 조회수', (s, b) => { if (profLoading(b)) return '…'; const p = popOf(b); return p && p[0] ? p[0].views : null; }, 'hi'],
     ['sec', '제목 노출 (최근 글 30개)'],
     ['정상', 'shown'], ['반영중', 'pending'], ['누락', 'missing'],
     ['sec', '운영 진단 (참고 기준)'],
     ...['발행량', '꾸준함', '최근 활동', '태그 활용'].map((label, k) => [label, (s) => { const d = diagnose(s)[k]; return `<span class="pill ${d[1]}">${L[d[1]]}</span>`; }]),
   ];
-  const head = `<thead><tr><th></th>${blogs.map((b, i) => `<th class="num">${roleTag(b)}<br>${dotOf(i)}<a href="${esc(b.data.channel.link || 'https://blog.naver.com/' + b.data.blogId)}" target="_blank" rel="noopener" style="color:inherit">${esc(nameOf(b))}</a></th>`).join('')}</tr></thead>`;
+  const head = `<colgroup><col>${blogs.map((b) => `<col class="${rc(b).trim()}">`).join('')}</colgroup><thead><tr><th></th>${blogs.map((b, i) => `<th class="num${rc(b)}">${roleTag(b)}<br>${dotOf(i)}<a href="${esc(b.data.channel.link || 'https://blog.naver.com/' + b.data.blogId)}" target="_blank" rel="noopener" style="color:inherit">${esc(nameOf(b))}</a></th>`).join('')}</tr></thead>`;
   const body = rows.map(([label, f, dir]) => {
     if (label === 'sec') return `<tr class="sec"><td colspan="${blogs.length + 1}">${f}</td></tr>`;
     if (typeof f === 'string') {
@@ -930,11 +955,11 @@ function renderCompare(tableOnly) {
   colsEl.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(220px, 1fr))`;
   colsEl.innerHTML = blogs.map((b, i) => {
     const s = b.stats;
-    if (!s.n) return `<div class="col"><h3>${dotOf(i)}${roleTag(b)}${esc(nameOf(b))}</h3><span class="hint">공개 글 없음</span></div>`;
+    if (!s.n) return `<div class="col${rc(b)}"><h3>${dotOf(i)}${roleTag(b)}${esc(nameOf(b))}</h3><span class="hint">공개 글 없음</span></div>`;
     const cats = topN(s.cats, 5).map(([c, v]) => { const p = Math.round(v / s.n * 100);
       return `<div class="bar"><div class="track"><div class="fill" style="width:${p}%;background:${colorOf(i)}"></div><span class="name">${esc(c)}</span></div><span class="pct">${p}%</span></div>`; }).join('');
     const tags = topN(s.tags, 12).map(([t, v]) => `<span class="chip${tagOwners.get(t) > 1 ? ' shared' : ''}">${esc(t)}<b>${v}</b></span>`).join('') || '<span class="hint">태그 없음</span>';
-    return `<div class="col"><h3>${dotOf(i)}${roleTag(b)}${esc(nameOf(b))}</h3><div class="sub2" style="margin-top:0">카테고리 TOP 5</div>${cats}<div class="sub2">태그 TOP 12</div><div class="chips">${tags}</div></div>`;
+    return `<div class="col${rc(b)}"><h3>${dotOf(i)}${roleTag(b)}${esc(nameOf(b))}</h3><div class="sub2" style="margin-top:0">카테고리 TOP 5</div>${cats}<div class="sub2">태그 TOP 12</div><div class="chips">${tags}</div></div>`;
   }).join('');
 
   cmpLimit = 15;
@@ -955,7 +980,7 @@ function renderCmpPosts() {
     const list = lists[bi];
     const items = list.slice(0, cmpLimit).map((i) => `<li><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>
       <div class="pm">${fmtDate(i.pubDate)}<span class="sep"></span>${esc(i.category)}${reactOf(b, i) ? `<span class="sep"></span>공감 ${fmtN(reactOf(b, i).likes)}<span class="sep"></span>댓글 ${fmtN(reactOf(b, i).comments)}` : ''}</div></li>`).join('');
-    return `<div class="col"><h3>${dotOf(bi)}${roleTag(b)}${esc(nameOf(b))}<span class="cnt">${Math.min(cmpLimit, list.length)}/${list.length}</span></h3>
+    return `<div class="col${rc(b)}"><h3>${dotOf(bi)}${roleTag(b)}${esc(nameOf(b))}<span class="cnt">${Math.min(cmpLimit, list.length)}/${list.length}</span></h3>
       ${items ? `<ul class="plist">${items}</ul>` : '<span class="hint">해당하는 글이 없어요</span>'}</div>`;
   }).join('');
   const more = document.getElementById('cmpMore');
