@@ -22,7 +22,15 @@
   .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
-  form { display: flex; gap: 8px; flex-wrap: wrap; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  .fields { flex: 1 1 520px; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); min-width: 0; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field input { width: 100%; }
+  .flabel { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .flabel.me { color: var(--accent); }
+  .role { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px; margin-right: 6px; background: var(--bg); color: var(--muted); vertical-align: 1px; }
+  .role.me { background: var(--accent-soft); color: var(--accent); }
+  .expoBtn { padding: 4px 10px; font-size: 12px; font-weight: 600; }
   input[type=text] { flex: 1 1 320px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
     background: var(--card); color: var(--text); font-size: 15px; }
   button { padding: 12px 18px; border: 0; border-radius: 10px; background: var(--accent); color: #fff;
@@ -120,10 +128,14 @@
   <p class="sub">네이버 블로그 RSS로 발행 주기·카테고리·태그·제목 패턴을 분석합니다.</p>
 
   <form id="f">
-    <input id="q" type="text" placeholder="블로그 ID 또는 주소 (쉼표로 최대 5개 비교) 예: naverofficial, blog.naver.com/blogpeople" />
+    <div class="fields">
+      <label class="field"><span class="flabel me">내 블로그</span><input id="qMe" type="text" placeholder="예: blog.naver.com/아이디 또는 아이디" autocomplete="off" /></label>
+      <label class="field"><span class="flabel">경쟁 블로그 1</span><input id="qC1" type="text" placeholder="선택" autocomplete="off" /></label>
+      <label class="field"><span class="flabel">경쟁 블로그 2</span><input id="qC2" type="text" placeholder="선택" autocomplete="off" /></label>
+    </div>
     <button type="submit">분석하기</button>
   </form>
-  <div class="hint">blog.naver.com/<b>아이디</b> 의 아이디 부분을 입력하거나 블로그 주소를 그대로 붙여넣으세요.</div>
+  <div class="hint">블로그 주소를 그대로 붙여넣거나 아이디만 입력하세요. 제목 노출 확인은 내 블로그만 바로 진행하고, 경쟁 블로그는 버튼을 눌러 따로 확인합니다.</div>
   <div class="notice"><b>최근 공개 글 30개</b>를 기준으로 분석합니다. 조회수·공감·댓글 수, 검색 순위, 본문 전체 글자 수는 RSS에 없어 분석할 수 없습니다.</div>
   <div id="err" class="error hidden"></div>
 
@@ -271,7 +283,7 @@ function analyze(data) {
 }
 
 // ---- 제목 노출 (검색 API) ----
-const ST = { shown: '정상', pending: '미반영', missing: '누락', error: '확인 실패' };
+const ST = { shown: '정상', pending: '반영중', missing: '누락', error: '확인 실패' };
 const stCls = (x) => x.status === 'error' ? 'rerr' : x.status;
 function expoSummary(e) {
   const c = { shown: 0, pending: 0, missing: 0, error: 0 };
@@ -286,7 +298,7 @@ function expoRefresh(b) {
 async function fetchExpoBatch(id, offset) {
   for (let t = 0; t < 3; t++) {          // 요청 자체가 실패하면 2번 더 시도
     try {
-      const r = await fetch(`/api/exposure?v=7&id=${encodeURIComponent(id)}&offset=${offset}&limit=${EXPO_BATCH}${t ? '&retry=' + Date.now() : ''}`);
+      const r = await fetch(`/api/exposure?v=8&id=${encodeURIComponent(id)}&offset=${offset}&limit=${EXPO_BATCH}${t ? '&retry=' + Date.now() : ''}`);
       const body = await r.json();
       if (r.ok) return { ok: true, body };
       if (body.code === 'no_key' || r.status === 400 || r.status === 404) return { ok: false, fatal: true, body };
@@ -325,29 +337,32 @@ function expoRankCell(b, item) {
   const logNo = (item.link.match(/\/(\d{9,})/) || [])[1];
   const x = b.expo.map.get(logNo);
   if (!x) return b.expo.status === 'loading' ? '<span class="hint">확인 중…</span>' : '<span class="hint">-</span>';
-  const badge = `<span class="rk ${stCls(x)}"${x.skipped ? ' title="발행 1시간 이내라 아직 검색하지 않았어요"' : ''}>${ST[x.status]}</span>`;
+  const badge = `<span class="rk ${stCls(x)}">${ST[x.status]}</span>`;
   return x.status === 'shown' ? badge : `${badge} <a class="verify" href="${naverBlogSearch(item.title)}" target="_blank" rel="noopener" title="네이버 블로그 탭에서 이 제목을 검색해 직접 확인">직접 확인</a>`;
 }
 const naverBlogSearch = (title) => 'https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(title);
 function renderExpo() {
   const b = blogs[current], el = document.getElementById('expo'); if (!b) return;
   const e = b.expo;
-  if (!e) { el.innerHTML = '<p class="hint">확인을 준비하고 있어요.</p>'; return; }
+  if (!e) { el.innerHTML = b.role === 'me' ? '<p class="hint">확인을 준비하고 있어요.</p>'
+    : `<p class="hint" style="margin:0 0 10px">경쟁 블로그는 버튼을 눌러야 확인해요. 글 30개를 검색하므로 API를 30회 사용합니다.</p><button type="button" class="ghost expoBtn" data-expo="${blogs.indexOf(b)}">제목 노출 확인하기</button>`; return; }
   if (e.status !== 'ok' && e.status !== 'loading') { el.innerHTML = `<p class="hint">${esc(e.message || '확인하지 못했어요.')}</p>`; return; }
   const s = expoSummary(e.data);
   const loading = e.status === 'loading';
   const head = loading ? `<div class="hint" style="margin-bottom:10px">최근 글 제목을 검색하는 중이에요 · <b>${e.done}/${e.total}</b>개 확인</div>` : '';
   const retry = !loading && s.error ? `<button class="ghost" type="button" id="expoRetry" style="margin-top:10px;padding:6px 12px;font-size:13px">확인 실패 ${s.error}개 다시 확인</button>` : '';
   el.innerHTML = head + `<div class="expo"><div><div class="hint">정상</div><div class="big">${s.shown}<small>/${s.n}건</small></div>
-    <div class="hint" style="margin-top:6px">정상 ${s.shown} · 미반영 ${s.pending} · 누락 ${s.missing}${s.error ? ` · 확인 실패 ${s.error}` : ''}</div>
+    <div class="hint" style="margin-top:6px">정상 ${s.shown} · 반영중 ${s.pending} · 누락 ${s.missing}${s.error ? ` · 확인 실패 ${s.error}` : ''}</div>
     ${e.data.checkedAt ? `<div class="hint" style="margin-top:6px">확인 시각 ${fmtDate(e.data.checkedAt)}</div>` : ''}${retry}</div>
     <div><div class="sq">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)} · ${ST[x.status]}"></span>`).join('')}${'<span></span>'.repeat(Math.max(0, (e.total || 0) - e.data.results.length))}</div>
-    <div class="lg"><span><i class="shown"></i>정상: 검색에 나옴</span><span><i class="pending"></i>미반영: 발행 1시간 이내 (아직 검색하지 않음)</span><span><i class="missing"></i>누락: 발행 1시간이 지났는데 검색에 없음</span></div>
-    <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. <b>정상은 확실하지만, 미반영·누락은 검색 API에서 못 찾았다는 뜻일 뿐이에요.</b> 검색 API는 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 아래 게시물 목록의 '직접 확인'으로 실제 화면을 확인해 주세요.</p></div></div>`;
+    <div class="lg"><span><i class="shown"></i>정상: 검색에 나옴</span><span><i class="pending"></i>반영중: 발행 1시간 이내인데 아직 검색에 없음</span><span><i class="missing"></i>누락: 발행 1시간이 지났는데 검색에 없음</span></div>
+    <p class="hint" style="margin-top:10px">왼쪽 위부터 최신 글 순서예요. <b>정상은 확실하지만, 반영중·누락은 검색 API에서 못 찾았다는 뜻일 뿐이에요.</b> 검색 API는 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 아래 게시물 목록의 '직접 확인'으로 실제 화면을 확인해 주세요.</p></div></div>`;
 }
 
 document.addEventListener('click', (ev) => {
   if (ev.target && ev.target.id === 'expoRetry') { const b = blogs[current]; if (b) loadExposure(b, true); }
+  const eb = ev.target && ev.target.closest && ev.target.closest('[data-expo]');
+  if (eb) { const b = blogs[+eb.dataset.expo]; if (b) loadExposure(b); }
 });
 
 function diagnose(s) {
@@ -387,7 +402,7 @@ function render() {
   document.getElementById('cmpView').classList.add('hidden');
   document.getElementById('profile').innerHTML = `
     ${data.channel.image ? `<img src="${esc(data.channel.image)}" alt="" referrerpolicy="no-referrer">` : ''}
-    <div><a href="${esc(data.channel.link || 'https://blog.naver.com/' + data.blogId)}" target="_blank" rel="noopener">${esc(data.channel.title || data.blogId)}</a>
+    <div>${roleTag(blogs[current])}<a href="${esc(data.channel.link || 'https://blog.naver.com/' + data.blogId)}" target="_blank" rel="noopener">${esc(data.channel.title || data.blogId)}</a>
     <p>${esc(data.blogId)} · ${esc(data.channel.description || '')}</p></div>`;
   const k = [
     [s.n, '분석된 글 수'], [s.perWeek ?? '-', '주 평균 발행'], [s.medGap != null ? s.medGap + '일' : '-', '발행 간격(중앙값)'],
@@ -396,7 +411,7 @@ function render() {
   ];
   document.getElementById('kpis').innerHTML = k.map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join('');
   document.getElementById('insights').innerHTML = insights(s).map((t) => `<li>${t}</li>`).join('');
-  renderExpo(); loadExposure(blogs[current]);
+  renderExpo(); if (blogs[current].role === 'me') loadExposure(blogs[current]);
   const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
   document.getElementById('diag').innerHTML = diagnose(s).map(([t, lv, v, c]) =>
     `<div><div class="t">${t}<span class="pill ${lv === 'info' ? 'mid' : lv}">${L[lv]}</span></div><div class="d">${esc(v)}<br>${c}</div></div>`).join('');
@@ -443,6 +458,8 @@ function renderPosts() {
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const colorOf = (i) => css('--s' + (i % 5 + 1));
 const nameOf = (b) => b.data.channel.title || b.data.blogId;
+const ROLE = { me: '내 블로그', c1: '경쟁 1', c2: '경쟁 2' };
+const roleTag = (b) => b.role ? `<span class="role ${b.role === 'me' ? 'me' : ''}">${ROLE[b.role]}</span>` : '';
 const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
 const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
 
@@ -466,18 +483,18 @@ function renderCompare(tableOnly) {
     ['글당 평균 태그', (s) => s.avgTags, 'hi'], ['태그 없는 글', (s) => s.noTag, 'lo'], ['제목 평균 길이(자)', (s) => s.avgTitle],
     ['대표 이미지 포함률', (s) => s.thumbRate + '%'],
     ['sec', '제목 노출 (최근 글 30개)'],
-    ['정상', 'shown'], ['미반영', 'pending'], ['누락', 'missing'],
+    ['정상', 'shown'], ['반영중', 'pending'], ['누락', 'missing'],
     ['sec', '운영 진단 (참고 기준)'],
     ...['발행량', '꾸준함', '최근 활동', '태그 활용'].map((label, k) => [label, (s) => { const d = diagnose(s)[k]; return `<span class="pill ${d[1]}">${L[d[1]]}</span>`; }]),
   ];
-  const head = `<thead><tr><th></th>${blogs.map((b, i) => `<th class="num">${dotOf(i)}<a href="${esc(b.data.channel.link || 'https://blog.naver.com/' + b.data.blogId)}" target="_blank" rel="noopener" style="color:inherit">${esc(nameOf(b))}</a></th>`).join('')}</tr></thead>`;
+  const head = `<thead><tr><th></th>${blogs.map((b, i) => `<th class="num">${roleTag(b)}<br>${dotOf(i)}<a href="${esc(b.data.channel.link || 'https://blog.naver.com/' + b.data.blogId)}" target="_blank" rel="noopener" style="color:inherit">${esc(nameOf(b))}</a></th>`).join('')}</tr></thead>`;
   const body = rows.map(([label, f, dir]) => {
     if (label === 'sec') return `<tr class="sec"><td colspan="${blogs.length + 1}">${f}</td></tr>`;
     if (typeof f === 'string') {
-      const vals = blogs.map((b) => { const e = b.expo; if (!e) return null; if (e.status === 'loading') return { loading: `${e.done}/${e.total}` }; if (e.status !== 'ok') return -1; const sm = expoSummary(e.data); return { v: sm[f], n: sm.n }; });
-      const nums = vals.filter((v) => v && v !== -1 && !v.loading).map((v) => v.v);
+      const vals = blogs.map((b) => { const e = b.expo; if (!e) return b.role === 'me' ? null : { ask: blogs.indexOf(b) }; if (e.status === 'loading') return { loading: `${e.done}/${e.total}` }; if (e.status !== 'ok') return -1; const sm = expoSummary(e.data); return { v: sm[f], n: sm.n }; });
+      const nums = vals.filter((v) => v && v !== -1 && !v.loading && v.ask === undefined).map((v) => v.v);
       const best = f === 'pending' || new Set(nums).size < 2 ? null : f === 'shown' ? Math.max(...nums) : Math.min(...nums);
-      return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${v && v !== -1 && !v.loading && v.v === best ? ' best' : ''}">${v === null ? '<span class="hint">확인 중…</span>' : v.loading ? `<span class="hint">확인 중 ${v.loading}</span>` : v === -1 ? '<span class="hint">-</span>' : `${v.v}/${v.n}`}</td>`).join('')}</tr>`;
+      return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${v && v !== -1 && !v.loading && v.ask === undefined && v.v === best ? ' best' : ''}">${v === null ? '<span class="hint">확인 중…</span>' : v.ask !== undefined ? (f === 'shown' ? `<button type="button" class="ghost expoBtn" data-expo="${v.ask}">노출 확인하기</button>` : '<span class="hint">-</span>') : v.loading ? `<span class="hint">확인 중 ${v.loading}</span>` : v === -1 ? '<span class="hint">-</span>' : `${v.v}/${v.n}`}</td>`).join('')}</tr>`;
     }
     const vals = blogs.map((b) => (b.stats.n ? f(b.stats) : null));
     let best = null;
@@ -486,7 +503,7 @@ function renderCompare(tableOnly) {
   }).join('');
   document.getElementById('cmpTable').innerHTML = head + '<tbody>' + body + '</tbody>';
   if (tableOnly) return;
-  blogs.forEach((b) => loadExposure(b));
+  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); });
   document.getElementById('cmpMeta').textContent = blogs.map((b) => b.stats.n
     ? `${nameOf(b)}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${nameOf(b)}: 공개 글 없음`).join(' · ') + ` · 분석 시각 ${fmtDate(blogs[0].data.fetchedAt)}`;
 
@@ -536,11 +553,11 @@ function renderCompare(tableOnly) {
   colsEl.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(220px, 1fr))`;
   colsEl.innerHTML = blogs.map((b, i) => {
     const s = b.stats;
-    if (!s.n) return `<div class="col"><h3>${dotOf(i)}${esc(nameOf(b))}</h3><span class="hint">공개 글 없음</span></div>`;
+    if (!s.n) return `<div class="col"><h3>${dotOf(i)}${roleTag(b)}${esc(nameOf(b))}</h3><span class="hint">공개 글 없음</span></div>`;
     const cats = topN(s.cats, 5).map(([c, v]) => { const p = Math.round(v / s.n * 100);
       return `<div class="bar"><div class="track"><div class="fill" style="width:${p}%;background:${colorOf(i)}"></div><span class="name">${esc(c)}</span></div><span class="pct">${p}%</span></div>`; }).join('');
     const tags = topN(s.tags, 12).map(([t, v]) => `<span class="chip${tagOwners.get(t) > 1 ? ' shared' : ''}">${esc(t)}<b>${v}</b></span>`).join('') || '<span class="hint">태그 없음</span>';
-    return `<div class="col"><h3>${dotOf(i)}${esc(nameOf(b))}</h3><div class="sub2" style="margin-top:0">카테고리 TOP 5</div>${cats}<div class="sub2">태그 TOP 12</div><div class="chips">${tags}</div></div>`;
+    return `<div class="col"><h3>${dotOf(i)}${roleTag(b)}${esc(nameOf(b))}</h3><div class="sub2" style="margin-top:0">카테고리 TOP 5</div>${cats}<div class="sub2">태그 TOP 12</div><div class="chips">${tags}</div></div>`;
   }).join('');
 
   cmpLimit = 15;
@@ -561,7 +578,7 @@ function renderCmpPosts() {
     const list = lists[bi];
     const items = list.slice(0, cmpLimit).map((i) => `<li><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>
       <div class="pm">${fmtDate(i.pubDate)} · ${esc(i.category)} · 태그 ${i.tags.length}</div></li>`).join('');
-    return `<div class="col"><h3>${dotOf(bi)}${esc(nameOf(b))}<span class="cnt">${Math.min(cmpLimit, list.length)}/${list.length}</span></h3>
+    return `<div class="col"><h3>${dotOf(bi)}${roleTag(b)}${esc(nameOf(b))}<span class="cnt">${Math.min(cmpLimit, list.length)}/${list.length}</span></h3>
       ${items ? `<ul class="plist">${items}</ul>` : '<span class="hint">해당하는 글이 없어요</span>'}</div>`;
   }).join('');
   const more = document.getElementById('cmpMore');
@@ -578,19 +595,23 @@ function downloadCsv(filename, rows) {
 
 document.getElementById('f').onsubmit = async (e) => {
   e.preventDefault();
-  const ids = parseIds(document.getElementById('q').value);
+  const roles = [['me', 'qMe'], ['c1', 'qC1'], ['c2', 'qC2']]
+    .map(([role, el]) => ({ role, id: parseIds(document.getElementById(el).value)[0] })).filter((x) => x.id);
+  const seen = new Set(); const entries = roles.filter((x) => !seen.has(x.id) && seen.add(x.id));
+  const ids = entries.map((x) => x.id);
   const err = document.getElementById('err');
   err.classList.add('hidden');
-  if (!ids.length) return;
+  if (!ids.length) { err.textContent = '블로그 주소나 아이디를 하나 이상 입력해 주세요.'; err.classList.remove('hidden'); return; }
   const btn = document.querySelector('#f button'); btn.disabled = true; btn.textContent = '불러오는 중…';
   const results = await Promise.all(ids.map((id) => fetch('/api/rss?id=' + encodeURIComponent(id))
     .then(async (r) => ({ id, ok: r.ok, body: await r.json() })).catch(() => ({ id, ok: false, body: { error: '네트워크 오류' } }))));
   btn.disabled = false; btn.textContent = '분석하기';
   const fails = results.filter((r) => !r.ok);
   if (fails.length) { err.innerHTML = fails.map((f) => `<b>${esc(f.id)}</b>: ${esc(f.body.error)}`).join('<br>'); err.classList.remove('hidden'); }
-  blogs = results.filter((r) => r.ok).map((r) => ({ data: r.body, stats: analyze(r.body) }));
+  blogs = results.map((r, i) => ({ r, role: entries[i].role })).filter((x) => x.r.ok)
+    .map((x) => ({ data: x.r.body, stats: analyze(x.r.body), role: x.role }));
   current = 0;
-  history.replaceState(null, '', '?id=' + ids.join(','));
+  history.replaceState(null, '', '?' + entries.map((x) => `${x.role}=${encodeURIComponent(x.id)}`).join('&'));
   document.getElementById('result').classList.add('hidden');
   document.getElementById('cmpView').classList.add('hidden');
   if (!blogs.length) return;
@@ -610,8 +631,15 @@ document.getElementById('cmpCsv').onclick = () => {
     ...allPosts().map((i) => [nameOf(blogs[i.bi]), fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link])]);
 };
 
-const init = new URLSearchParams(location.search).get('id');
-if (init) { document.getElementById('q').value = init; document.getElementById('f').requestSubmit(); }
+// 주소로 바로 열기: ?me=아이디&c1=아이디&c2=아이디 (예전 형식 ?id=a,b,c 도 지원)
+(() => {
+  const sp = new URLSearchParams(location.search);
+  const legacy = (sp.get('id') || '').split(',').map((x) => x.trim()).filter(Boolean);
+  const vals = { qMe: sp.get('me') || legacy[0], qC1: sp.get('c1') || legacy[1], qC2: sp.get('c2') || legacy[2] };
+  let any = false;
+  Object.entries(vals).forEach(([el, v]) => { if (v) { document.getElementById(el).value = v; any = true; } });
+  if (any) document.getElementById('f').requestSubmit();
+})();
 </script>
 </body>
 </html>

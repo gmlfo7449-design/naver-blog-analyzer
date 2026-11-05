@@ -6,13 +6,12 @@ const { getBlog, ID_RE } = require('./rss');
 const API = 'https://naverapihub.apigw.ntruss.com/search/v1/blog';
 const MAX_POSTS = 30;      // 최근 글 몇 개를 볼지 (글 1개 = API 1회)
 const DISPLAY = 30;        // 검색 결과 상위 몇 개까지 볼지 (30위 안 = 노출)
-const SKIP_HOURS = 1;      // 발행 1시간 이내 글은 검색하지 않고 '미반영'
-const PENDING_HOURS = 1;   // 발행 1시간이 지났는데 검색에 없으면 '누락'
+const PENDING_HOURS = 1;   // 검색에 없을 때: 발행 1시간 이내면 '반영중', 지나면 '누락'
 const CONCURRENCY = 3;
 const BATCH_MAX = 10;      // 한 번 요청에 확인할 최대 글 수 (함수 시간 제한을 넘지 않게)
 const cache = new Map();
 const TTL_MS = 60 * 60 * 1000;
-const VERSION = 7; // 판정 방식이 바뀌면 올려서 CDN 캐시를 무효화
+const VERSION = 8; // 판정 방식이 바뀌면 올려서 CDN 캐시를 무효화
 
 const logNoOf = (url) => (String(url).match(/\/(\d{9,})(?:[/?#]|$)/) || [])[1] || (String(url).match(/logNo=(\d+)/) || [])[1] || '';
 
@@ -76,7 +75,6 @@ module.exports = async function handler(req, res) {
     const results = await pool(posts, CONCURRENCY, async (p) => {
       const logNo = logNoOf(p.link);
       const ageH = (Date.now() - new Date(p.pubDate).getTime()) / 36e5;
-      if (ageH < SKIP_HOURS) return { logNo, title: p.title, pubDate: p.pubDate, status: 'pending', rank: null, skipped: true };
       // 제목을 큰따옴표로 감싸 '정확히 일치' 검색을 한다 (안쪽 큰따옴표는 지움)
       const exact = '"' + p.title.replace(/["“”]/g, ' ').replace(/\s+/g, ' ').trim() + '"';
       let r = await searchRank(exact, id, logNo);
@@ -87,7 +85,7 @@ module.exports = async function handler(req, res) {
       const status = r.error ? 'error' : r.indexed ? 'shown' : ageH < PENDING_HOURS ? 'pending' : 'missing';
       return { logNo, title: p.title, pubDate: p.pubDate, status, ...r };
     });
-    const data = { version: VERSION, blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, pendingHours: PENDING_HOURS, skipHours: SKIP_HOURS,
+    const data = { version: VERSION, blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, pendingHours: PENDING_HOURS,
       offset, limit, total: all.length, results };
     // 확인 실패가 섞인 결과는 캐시하지 않는다 (다시 확인하면 새로 검색)
     if (!results.some((x) => x.error)) cache.set(key + ':' + offset + ':' + limit, { at: Date.now(), data });
