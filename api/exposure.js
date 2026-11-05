@@ -5,7 +5,8 @@ const { getBlog, ID_RE } = require('./rss');
 
 const API = 'https://naverapihub.apigw.ntruss.com/search/v1/blog';
 const MAX_POSTS = 30;      // 최근 글 몇 개를 볼지 (글 1개 = API 1회)
-const DISPLAY = 100;       // 검색 결과 상위 몇 개까지 볼지 (API 최대 100)
+const DISPLAY = 30;        // 검색 결과 상위 몇 개까지 볼지 (30위 안 = 노출)
+const PENDING_HOURS = 48;  // 발행 후 이 시간 안이면 '미반영'으로 본다
 const CONCURRENCY = 5;
 const cache = new Map();
 const TTL_MS = 60 * 60 * 1000;
@@ -50,9 +51,11 @@ module.exports = async function handler(req, res) {
     const results = await pool(posts, CONCURRENCY, async (p) => {
       const logNo = logNoOf(p.link);
       const r = await searchRank(p.title, id, logNo);
-      return { logNo, title: p.title, pubDate: p.pubDate, ...r };
+      const ageH = (Date.now() - new Date(p.pubDate).getTime()) / 36e5;
+      const status = r.error ? 'error' : r.rank ? 'shown' : ageH < PENDING_HOURS ? 'pending' : 'missing';
+      return { logNo, title: p.title, pubDate: p.pubDate, status, ...r };
     });
-    const data = { blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, results };
+    const data = { blogId: id, checkedAt: new Date().toISOString(), display: DISPLAY, pendingHours: PENDING_HOURS, results };
     cache.set(id, { at: Date.now(), data });
     res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=21600');
     send(200, data);
