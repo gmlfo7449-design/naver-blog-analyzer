@@ -229,7 +229,7 @@
       <div class="meta" id="cmpMeta"></div>
     </div>
     <div class="card">
-      <h2>주차별 발행 추이 <small>블로그마다 RSS에 담긴 기간이 달라, 기간 밖은 비워 둡니다</small></h2>
+      <h2>주차별 발행 추이 <small id="cmpWeekNote">모든 블로그의 데이터가 있는 기간만 비교합니다</small></h2>
       <div class="legend" id="cmpLegend"></div>
       <div class="chart-box" style="height:280px"><canvas id="cmpWeek" aria-label="블로그별 주차별 발행 수 선 차트"></canvas></div>
     </div>
@@ -611,16 +611,20 @@ function renderCompare(tableOnly) {
   document.getElementById('cmpLegend').innerHTML = blogs.map((b, i) => `<span>${dotOf(i)}${esc(nameOf(b))}</span>`).join('');
 
   // 2) 주차별 추이: 전체 블로그의 기간을 합친 공통 축
-  const first = new Date(Math.min(...live.map((b) => weekStart(b.stats.oldest).getTime())));
+  // 블로그마다 최근 30개 글이 덮는 기간이 다르므로, 모두 데이터가 있는 기간(가장 늦게 시작하는 블로그 기준)만 비교한다
+  const first = new Date(Math.max(...live.map((b) => weekStart(b.stats.oldest).getTime())));
   const last = new Date(Math.max(...live.map((b) => weekStart(b.stats.newest).getTime())));
   const keys = []; for (let w = first; w <= last; w = new Date(w.getTime() + 7 * 864e5)) keys.push(w.toISOString().slice(0, 10));
+  const cut = live.filter((b) => weekStart(b.stats.oldest).getTime() < first.getTime());
+  document.getElementById('cmpWeekNote').textContent = `${keys[0].slice(5).replace('-', '/')}주부터 ${keys[keys.length - 1].slice(5).replace('-', '/')}주까지 ${keys.length}주, 모든 블로그의 데이터가 있는 기간만 비교합니다.`
+    + (cut.length ? ` ${live.find((b) => weekStart(b.stats.oldest).getTime() === first.getTime()) ? nameOf(live.find((b) => weekStart(b.stats.oldest).getTime() === first.getTime())) : ''}의 최근 글 30개가 이 시점까지만 거슬러 가기 때문이에요.` : '');
   charts.push(new Chart(document.getElementById('cmpWeek'), {
     type: 'line',
     data: { labels: keys.map((k) => k.slice(2).replace(/-/g, '/')), datasets: blogs.map((b, i) => {
       if (!b.stats.n) return { label: nameOf(b), data: [] };
       const m = new Map(b.stats.items.map((it) => weekStart(it.pubDate).toISOString().slice(0, 10)).reduce((acc, k) => (acc.set(k, (acc.get(k) || 0) + 1), acc), new Map()));
       const lo = weekStart(b.stats.oldest).getTime(), hi = weekStart(b.stats.newest).getTime();
-      return { label: nameOf(b), borderColor: colorOf(i), backgroundColor: colorOf(i), borderWidth: 2, pointRadius: 2, tension: .25, spanGaps: false,
+      return { label: nameOf(b), borderColor: colorOf(i), backgroundColor: colorOf(i), borderWidth: 2, pointRadius: 2, tension: 0, spanGaps: false,
         data: keys.map((k) => { const t = new Date(k).getTime(); return t < lo || t > hi ? null : (m.get(k) || 0); }) };
     }) },
     options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } },
