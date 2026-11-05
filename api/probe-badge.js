@@ -1,18 +1,14 @@
-// 임시 확인용 (확인 후 삭제): 메이트·인플루언서 판별에 쓸 수 있는 값 찾기
+// 임시 확인용 (확인 후 삭제): 블로그·프로필 페이지에서 인플루언서 흔적 찾기
 module.exports = async function handler(req, res) {
   const id = String(req.query.id || '').replace(/[^\w-]/g, '');
-  const H = { Accept: 'application/json', Referer: `https://m.blog.naver.com/${id}` };
-  const out = {};
-  const info = await (await fetch(`https://m.blog.naver.com/api/blogs/${id}`, { headers: H })).json();
-  const r = info.result || {};
-  out.fields = Object.fromEntries(Object.entries(r).filter(([k]) => /mate|influ|power|official|suggest|direct|year|badge|cert/i.test(k)));
-  if (req.query.js) {
-    const html = await (await fetch(`https://m.blog.naver.com/${id}`, { headers: H })).text();
-    const srcs = [...html.matchAll(/<script[^>]+src="([^"]+\.js[^"]*)"/g)].map((m) => (m[1].startsWith('http') ? m[1] : 'https://m.blog.naver.com' + m[1]));
-    const found = new Set();
-    for (const s of srcs) { try { const js = await (await fetch(s, { headers: H })).text();
-      for (const m of js.matchAll(/["'`]([^"'`\s]{0,90}[Ii]nfluencer[^"'`\s]{0,90})["'`]/g)) if (/\/|api|\.naver|in\.naver/i.test(m[1])) found.add(m[1]); } catch (_) {} }
-    out.influencerPaths = [...found].slice(0, 60);
+  const pages = [`https://blog.naver.com/profile/intro.naver?blogId=${id}`, `https://blog.naver.com/PostList.naver?blogId=${id}`, `https://m.blog.naver.com/${id}`, `https://blog.naver.com/${id}`];
+  const out = [];
+  for (const u of pages) {
+    try {
+      const t = await (await fetch(u, { headers: { Referer: 'https://blog.naver.com/' }, signal: AbortSignal.timeout(8000) })).text();
+      const hits = [...t.matchAll(/.{0,80}(?:in\.naver\.com|[Ii]nfluencer|인플루언서).{0,80}/g)].map((m) => m[0].replace(/\s+/g, ' ')).slice(0, 8);
+      out.push({ u, len: t.length, hits });
+    } catch (e) { out.push({ u, error: e.message }); }
   }
   res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(out));
 };
