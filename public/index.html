@@ -212,6 +212,20 @@
   .visit .chart-box { height: 240px; }
   .empty { color: var(--muted); font-size: 14px; max-width: 64ch; word-break: keep-all; }
 
+  /* 인기글 */
+  .top3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 860px) { .top3 { grid-template-columns: 1fr; } }
+  .top3 a { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; color: var(--ink); text-decoration: none; min-width: 0; }
+  .top3 a:hover { border-color: var(--muted); }
+  .top3 .th { aspect-ratio: 16 / 9; background: var(--bg) center / cover no-repeat; position: relative; }
+  .top3 .rank { position: absolute; top: 10px; left: 10px; background: var(--ink); color: var(--surface); font-weight: 700; font-size: 13px; padding: 3px 10px; border-radius: 6px; }
+  .top3 .bd { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .top3 .tt { font-weight: 600; line-height: 1.45; word-break: keep-all; overflow-wrap: anywhere; }
+  .top3 .vw { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 13px; }
+  .top3 .vw b { font-family: var(--num); font-stretch: 75%; font-size: 30px; color: var(--ink); font-weight: 700; margin-right: 4px; }
+  .popsum { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-bottom: 16px; font-size: 14px; color: var(--muted); }
+  .popsum b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
   /* 첫 화면: 결과 미리보기 */
   #intro { margin-top: 56px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
   @media (max-width: 860px) { #intro { grid-template-columns: 1fr; gap: 20px; } }
@@ -304,6 +318,10 @@
     <div class="card">
       <h2>방문자 추이 <small id="visitNote">날짜별 방문자 수예요.</small></h2>
       <div id="visit"></div>
+    </div>
+    <div class="card">
+      <h2>인기글 조회수 <small>네이버가 블로그에 공개하는 인기글(최대 10개)의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</small></h2>
+      <div id="pop"></div>
     </div>
     <div class="card">
       <h2>운영 진단 <small>이 도구가 정한 참고 기준이며, 노출·성과와의 관계는 검증되지 않았습니다</small></h2>
@@ -538,7 +556,7 @@ function render() {
   renderMast(document.getElementById('mast'), blogs[current]);
   renderKpis(blogs[current]);
   loadProfile(blogs[current]);
-  renderVisit(blogs[current]); loadVisitors(blogs[current]);
+  renderVisit(blogs[current]); loadVisitors(blogs[current]); renderPop(blogs[current]);
   document.getElementById('insights').innerHTML = insights(s).map((t) => `<li>${t}</li>`).join('');
   renderExpo(); if (blogs[current].role === 'me') loadExposure(blogs[current]);
   const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
@@ -580,8 +598,8 @@ function renderPosts() {
   const q = document.getElementById('filter').value.trim().toLowerCase();
   const rows = (s.items || []).filter((i) => !q || (i.title + ' ' + i.tags.join(' ') + ' ' + i.category).toLowerCase().includes(q));
   const b = blogs[current];
-  document.getElementById('posts').innerHTML = `<thead><tr><th>발행일</th><th>노출</th><th>제목</th><th>카테고리</th><th class="num">공감</th><th class="num">댓글</th></tr></thead><tbody>` +
-    rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td>${expoRankCell(b, i)}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num">${fmtN((reactOf(b, i) || {}).likes)}</td><td class="num">${fmtN((reactOf(b, i) || {}).comments)}</td></tr>`).join('') + '</tbody>';
+  document.getElementById('posts').innerHTML = `<thead><tr><th>발행일</th><th>노출</th><th>제목</th><th>카테고리</th><th class="num">조회</th><th class="num">공감</th><th class="num">댓글</th></tr></thead><tbody>` +
+    rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td>${expoRankCell(b, i)}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num" title="${popViews(b, logNoOfItem(i)) == null ? '인기글이 아니면 조회수가 공개되지 않아요' : ''}">${fmtN(popViews(b, logNoOfItem(i)))}</td><td class="num">${fmtN((reactOf(b, i) || {}).likes)}</td><td class="num">${fmtN((reactOf(b, i) || {}).comments)}</td></tr>`).join('') + '</tbody>';
 }
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -591,6 +609,24 @@ const ROLE = { me: '내 블로그', c1: '경쟁 1', c2: '경쟁 2' };
 const roleTag = (b) => b.role ? `<span class="role ${b.role === 'me' ? 'me' : ''}">${ROLE[b.role]}</span>` : '';
 const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
 const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
+
+// ---- 인기글 조회수 (비공식) ----
+const popOf = (b) => (b.prof && b.prof.status === 'ok' ? (b.prof.data.popular || []) : null);
+const popViews = (b, logNo) => { const p = popOf(b); const x = p && p.find((q) => q.logNo === logNo); return x ? x.views : null; };
+function popSum(b) { const p = popOf(b); if (!p) return null; const v = p.map((x) => x.views).filter((x) => x != null); return v.length ? v.reduce((a, c) => a + c, 0) : null; }
+function renderPop(b) {
+  const el = document.getElementById('pop'); if (!el) return;
+  if (!b.prof || b.prof.status === 'loading') { el.innerHTML = '<p class="empty">인기글을 불러오고 있어요.</p>'; return; }
+  const p = popOf(b);
+  if (!p || !p.length) { el.innerHTML = '<p class="empty">네이버에서 이 블로그의 인기글을 가져오지 못했어요. 인기글을 공개하지 않은 블로그일 수 있어요.</p>'; return; }
+  const sum = popSum(b), top = p.slice(0, 3);
+  el.innerHTML = `<div class="popsum"><span>인기글 ${p.length}개 조회수 합 <b>${fmtN(sum)}회</b></span><span>1위 <b>${fmtN(p[0].views)}회</b></span></div>
+    <div class="top3">${top.map((x, i) => `<a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener">
+      <div class="th"${x.thumbnail ? ` style="background-image:url('${esc(x.thumbnail)}')"` : ''}><span class="rank">${i + 1}위</span></div>
+      <div class="bd"><div class="tt">${esc(x.title)}</div><div class="vw"><span><b>${fmtN(x.views)}</b>조회</span><span>${x.date ? fmtDate(x.date).slice(0, 10) : ''}</span></div></div></a>`).join('')}</div>
+    ${p.length > 3 ? `<div class="scroll" style="margin-top:18px"><table><thead><tr><th class="num">순위</th><th>제목</th><th class="num">조회</th><th class="num">공감</th><th class="num">댓글</th><th>발행일</th></tr></thead><tbody>
+      ${p.slice(3).map((x, i) => `<tr><td class="num">${i + 4}</td><td><a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener">${esc(x.title)}</a></td><td class="num">${fmtN(x.views)}</td><td class="num">${fmtN(x.likes)}</td><td class="num">${fmtN(x.comments)}</td><td style="white-space:nowrap">${x.date ? fmtDate(x.date).slice(0, 10) : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+}
 
 // ---- 방문자 추이 (비공식) ----
 async function loadVisitors(b) {
@@ -677,7 +713,7 @@ async function loadProfile(b) {
     b.prof = r.ok ? { status: 'ok', data: body, map: new Map((body.posts || []).map((x) => [x.logNo, x])) } : { status: 'error' };
   } catch (_) { b.prof = { status: 'error' }; }
   if (!blogs.includes(b)) return;
-  if (blogs.length === 1) { renderMast(document.getElementById('mast'), b); renderKpis(b); renderPosts(); if (b.vis && b.vis.status === 'ok') renderVisit(b); }
+  if (blogs.length === 1) { renderMast(document.getElementById('mast'), b); renderKpis(b); renderPosts(); renderPop(b); if (b.vis && b.vis.status === 'ok') renderVisit(b); }
   else { renderCompare(true); renderCmpPosts(); if (blogs.every((x) => x.vis && x.vis.status !== 'loading')) renderCmpVisit(); }
 }
 const logNoOfItem = (it) => (it.link.match(/\/(\d{9,})/) || [])[1];
@@ -729,6 +765,8 @@ function renderKpis(b) {
     s.perWeek >= 7 ? [`${Math.round(s.perWeek / 7 * 10) / 10}<small>회</small>`, '하루 평균 발행', gapText(s.medGapRaw)] : [`${s.perWeek ?? '-'}<small>회</small>`, '주 평균 발행', gapText(s.medGapRaw)],
     [rs && rs.likes != null ? `${rs.likes}<small>개</small>` : wait, '글당 평균 공감', rs && rs.comments != null ? `댓글은 평균 ${rs.comments}개` : ''],
   ];
+  const ps = popSum(b);
+  k.push([ps != null ? `${fmtN(ps)}<small>회</small>` : wait, '인기글 조회수 합', ps != null ? `인기글 ${popOf(b).length}개 기준` : '']);
   document.getElementById('kpis').innerHTML = k.map(([v, l, n]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div>${n ? `<div class="n">${n}</div>` : ''}</div>`).join('');
 }
 
@@ -765,6 +803,7 @@ function renderCompare(tableOnly) {
     ['sec', '규모와 반응'],
     ['이웃 수', (s, b) => PV(b, 'neighbors'), 'hi'], ['누적 방문자', (s, b) => PV(b, 'totalVisitors'), 'hi'], ['오늘 방문자', (s, b) => PV(b, 'todayVisitors'), 'hi'],
     ['글당 평균 공감', (s, b) => RV(b, 'likes'), 'hi'], ['글당 평균 댓글', (s, b) => RV(b, 'comments'), 'hi'],
+    ['인기글 10개 조회수 합', (s, b) => (b.prof && b.prof.status === 'loading' ? '…' : popSum(b)), 'hi'], ['인기글 1위 조회수', (s, b) => { if (b.prof && b.prof.status === 'loading') return '…'; const p = popOf(b); return p && p[0] ? p[0].views : null; }, 'hi'],
     ['sec', '제목 노출 (최근 글 30개)'],
     ['정상', 'shown'], ['반영중', 'pending'], ['누락', 'missing'],
     ['sec', '운영 진단 (참고 기준)'],

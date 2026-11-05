@@ -22,11 +22,12 @@ async function getJson(url, blogId) {
 const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 async function load(id) {
-  const [info, list] = await Promise.allSettled([
+  const [info, list, pop] = await Promise.allSettled([
     getJson(`${BASE}${id}`, id),
     getJson(`${BASE}${id}/post-list?categoryNo=0&itemCount=30&page=1`, id),
+    getJson(`${BASE}${id}/popular-post-list`, id),
   ]);
-  const out = { blogId: id, fetchedAt: new Date().toISOString(), profile: null, posts: [], errors: [] };
+  const out = { blogId: id, fetchedAt: new Date().toISOString(), profile: null, posts: [], popular: [], errors: [] };
   if (info.status === 'fulfilled') {
     const r = info.value;
     out.profile = {
@@ -51,6 +52,15 @@ async function load(id) {
       shares: num(p.shareCnt),
     })).filter((p) => p.logNo);
   } else out.errors.push('posts');
+  // 네이버가 고른 인기글 (최대 10개) — 조회수는 이 글들에만 공개된다
+  if (pop.status === 'fulfilled') {
+    const thumb = (p) => { const t = (p.thumbnailList || [])[0]; const u = t && (t.encodedThumbnailUrl || t.url || t.thumbnailUrl || ''); return u ? String(u).replace(/^http:/, 'https:') : ''; };
+    out.popular = (pop.value.popularPostList || []).map((p) => ({
+      logNo: String(p.logNo || ''), title: p.titleWithInspectMessage || '', views: num(p.viewCount),
+      likes: num(p.sympathyCnt), comments: num(p.commentCnt), date: p.addDate ? new Date(p.addDate).toISOString() : null,
+      category: p.categoryName || '', thumbnail: thumb(p),
+    })).filter((p) => p.logNo);
+  } else out.errors.push('popular');
   return out;
 }
 
