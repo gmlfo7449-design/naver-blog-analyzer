@@ -2,6 +2,7 @@
 const store = require('../lib/store');
 const { PUB_KEY } = require('../lib/auth');
 const { PLANS } = require('../lib/plans');
+const naver = require('./auth-naver');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -11,6 +12,7 @@ module.exports = async function handler(req, res) {
     authEnabled: !!(store.supabaseOn && PUB_KEY),
     supabaseUrl: store.supabaseOn ? store.SB_URL : '',
     publishableKey: PUB_KEY,
+    naverLogin: naver.enabled(),
     plans: PLANS,
   }));
 };

@@ -271,10 +271,9 @@
   .social { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
   .social:empty { display: none; }
   .social button { flex: 1 1 200px; height: 46px; border-radius: 10px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
-  .social .kakao { background: #fee500; color: #191600; border: 0; }
+  .social .naver { background: #03c75a; color: #fff; border: 0; }
+  .social .naver b { font-weight: 900; font-size: 17px; }
   .social .google { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; }
-  #newPwForm { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
-  #newPwForm.hidden { display: none; }
   .loginbox button[type=submit] { height: 47px; }
   .mypanel h2 { font-size: 16px; margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .mypanel h2 small { font-weight: 400; color: var(--muted); font-size: 13px; }
@@ -311,14 +310,7 @@
   <div class="topbar"><h1>블로그 발행 분석기</h1><div id="account" class="account"></div></div>
   <div id="loginBox" class="loginbox hidden">
     <div class="social" id="socialBtns"></div>
-    <form id="loginForm">
-      <label class="field"><span class="flabel">이메일</span><input id="loginEmail" type="email" placeholder="name@company.com" autocomplete="email" required /></label>
-      <label class="field"><span class="flabel">비밀번호</span><input id="loginPw" type="password" placeholder="6자 이상" autocomplete="current-password" minlength="6" required /></label>
-      <button type="submit" id="loginSubmit">로그인</button>
-      <button type="button" class="ghost" id="signupBtn">회원가입</button>
-    </form>
-    <p class="hint" id="loginMsg">처음이면 이메일과 비밀번호를 넣고 <b>회원가입</b>을 누르세요. <a href="#" id="resetPw">비밀번호를 잊었어요</a></p>
-    <form id="newPwForm" class="hidden"><label class="field"><span class="flabel">새 비밀번호</span><input id="newPw" type="password" minlength="6" autocomplete="new-password" required /></label><button type="submit">비밀번호 바꾸기</button></form>
+    <p class="hint" id="loginMsg">처음이면 자동으로 가입돼요. 같은 이메일이면 구글·네이버 어느 쪽으로 들어와도 같은 계정이에요.</p>
   </div>
   <section id="myPanel" class="mypanel hidden" aria-label="내 블로그"></section>
   <p class="sub">내 블로그와 경쟁 블로그를 넣으면 최근 글 30개의 발행 주기와 제목 노출 상태를 나란히 비교합니다.</p>
@@ -710,13 +702,17 @@ async function initAuth() {
     try {
       const st = await (await fetch(cfg.supabaseUrl + '/auth/v1/settings', { headers: { apikey: cfg.publishableKey } })).json();
       const ext = st.external || {}, btn = [];
-      if (ext.kakao) btn.push('<button type="button" class="kakao" data-oauth="kakao">카카오로 시작하기</button>');
+      if (cfg.naverLogin) btn.push('<button type="button" class="naver" data-naver="1"><b>N</b> 네이버로 시작하기</button>');
       if (ext.google) btn.push('<button type="button" class="google" data-oauth="google">Google로 시작하기</button>');
-      document.getElementById('socialBtns').innerHTML = btn.join('');
+      document.getElementById('socialBtns').innerHTML = btn.join('') || '';
+      if (!btn.length) document.getElementById('loginMsg').textContent = '로그인 방법을 준비하고 있어요.';
     } catch (_) {}
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (h.get('login_error')) { document.getElementById('loginBox').classList.remove('hidden'); document.getElementById('loginMsg').textContent = h.get('login_error'); history.replaceState(null, '', location.pathname + location.search); }
     session = (await sbc.auth.getSession()).data.session;
-    sbc.auth.onAuthStateChange((ev, s) => {
-      if (ev === 'PASSWORD_RECOVERY') { document.getElementById('loginBox').classList.remove('hidden'); document.getElementById('loginForm').classList.add('hidden'); document.getElementById('newPwForm').classList.remove('hidden'); document.getElementById('loginMsg').textContent = '새 비밀번호를 넣어 주세요.'; } const changed = (s && s.access_token) !== (session && session.access_token); session = s; if (changed) onLoginChanged(); });
+    if (!session && h.get('access_token') && h.get('refresh_token')) { session = (await sbc.auth.setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token') })).data.session; }
+    if (h.get('access_token')) history.replaceState(null, '', location.pathname + location.search);
+    sbc.auth.onAuthStateChange((ev, s) => { const changed = (s && s.access_token) !== (session && session.access_token); session = s; if (changed) onLoginChanged(); });
     await onLoginChanged();
   } catch (_) { renderAccount(); }
 }
@@ -733,7 +729,7 @@ function renderAccount() {
   el.innerHTML = session
     ? `<span>${esc((session.user && session.user.email) || '')}${myInfo ? ` · ${esc(myInfo.planName)}` : ''}</span><button type="button" class="ghost" id="logoutBtn">로그아웃</button>`
     : '<button type="button" class="ghost" id="loginBtn">로그인</button>';
-  if (session && document.getElementById('newPwForm').classList.contains('hidden')) document.getElementById('loginBox').classList.add('hidden');
+  if (session) document.getElementById('loginBox').classList.add('hidden');
 }
 let mySel = new Set(), mySeen = new Set();
 function renderMyPanel(msg, isErr) {
@@ -763,7 +759,7 @@ async function myAction(body) {
 }
 document.addEventListener('click', async (ev) => {
   const t = ev.target;
-  if (t.id === 'loginBtn') { const bx = document.getElementById('loginBox'); bx.classList.toggle('hidden'); if (!bx.classList.contains('hidden')) document.getElementById('loginEmail').focus(); }
+  if (t.id === 'loginBtn') { const bx = document.getElementById('loginBox'); bx.classList.toggle('hidden');  }
   if (t.id === 'logoutBtn' && sbc) { await sbc.auth.signOut(); session = null; onLoginChanged(); }
   if (t.dataset && t.dataset.myrm) myAction({ action: 'remove', blogId: t.dataset.myrm });
   if (t.id === 'myCompare' && myInfo) {
@@ -778,13 +774,6 @@ document.addEventListener('change', (ev) => {
   renderMyPanel();
 });
 document.addEventListener('submit', async (ev) => {
-  if (ev.target.id === 'loginForm') { ev.preventDefault(); emailAuth('login'); }
-  if (ev.target.id === 'newPwForm') {
-    ev.preventDefault();
-    const { error } = await sbc.auth.updateUser({ password: document.getElementById('newPw').value });
-    document.getElementById('loginMsg').textContent = error ? authMsg(error) : '비밀번호를 바꿨어요.';
-    if (!error) { document.getElementById('newPwForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); document.getElementById('loginBox').classList.add('hidden'); }
-  }
   if (ev.target.id === 'myAddForm') {
     ev.preventDefault();
     const id = parseIds(document.getElementById('myAddId').value)[0];
@@ -803,34 +792,12 @@ function authMsg(e) {
   if (/rate limit|too many/i.test(m)) return '요청이 많아 잠시 막혔어요. 몇 분 뒤 다시 시도해 주세요.';
   return '처리하지 못했어요: ' + m;
 }
-async function emailAuth(kind) {
-  const email = document.getElementById('loginEmail').value.trim(), pw = document.getElementById('loginPw').value, m = document.getElementById('loginMsg');
-  if (!sbc) return;
-  if (!email || pw.length < 6) { m.textContent = '이메일과 6자 이상 비밀번호를 넣어 주세요.'; return; }
-  m.textContent = kind === 'login' ? '로그인하는 중…' : '가입하는 중…';
-  if (kind === 'login') {
-    const { error } = await sbc.auth.signInWithPassword({ email, password: pw });
-    m.textContent = error ? authMsg(error) : '';
-  } else {
-    const { data, error } = await sbc.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.origin + location.pathname } });
-    if (error) m.textContent = authMsg(error);
-    else if (!data.session) m.textContent = `가입했어요. ${email} 메일함의 확인 링크를 한 번 눌러 주세요.`; // 이메일 확인이 켜져 있을 때
-    else m.textContent = '';
-  }
-}
 document.addEventListener('click', async (ev) => {
   const t = ev.target;
-  if (t.id === 'signupBtn') emailAuth('signup');
+  if (t.closest && t.closest('[data-naver]')) { location.href = '/api/auth-naver'; return; }
   if (t.dataset && t.dataset.oauth && sbc) {
     const { error } = await sbc.auth.signInWithOAuth({ provider: t.dataset.oauth, options: { redirectTo: location.origin + location.pathname } });
     if (error) document.getElementById('loginMsg').textContent = authMsg(error);
-  }
-  if (t.id === 'resetPw') {
-    ev.preventDefault();
-    const email = document.getElementById('loginEmail').value.trim(), m = document.getElementById('loginMsg');
-    if (!email) { m.textContent = '이메일을 먼저 넣고 다시 눌러 주세요.'; return; }
-    const { error } = await sbc.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-    m.textContent = error ? authMsg(error) : `${email}로 비밀번호 재설정 링크를 보냈어요.`;
   }
 });
 
@@ -874,7 +841,7 @@ function watchControl(b) {
     : `<button type="button" class="watchbtn" data-watch="${i}" data-on="1" title="매일 방문자 수를 기록해 다음 날부터 그래프에 나타나요.">매일 기록하기</button>`) + errNote;
 }
 document.addEventListener('click', (ev) => {
-  if (ev.target && ev.target.closest && ev.target.closest('[data-needlogin]')) { window.scrollTo({ top: 0, behavior: 'smooth' }); document.getElementById('loginBox').classList.remove('hidden'); document.getElementById('loginEmail').focus(); return; }
+  if (ev.target && ev.target.closest && ev.target.closest('[data-needlogin]')) { window.scrollTo({ top: 0, behavior: 'smooth' }); document.getElementById('loginBox').classList.remove('hidden');  return; }
   const t = ev.target && ev.target.closest && ev.target.closest('[data-watch]');
   if (!t) return;
   const b = blogs[+t.dataset.watch]; if (b) setWatch(b, t.dataset.on === '1');
