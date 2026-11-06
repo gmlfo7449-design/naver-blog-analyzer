@@ -6,438 +6,337 @@
 <title>블로그 발행 분석기</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,600..800&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
 <style>
-  /* 컨셉: 교정 데스크 — 블로그를 교정지처럼 검토한다. 섹션은 선과 여백으로 나누고, 박스는 블로그 칸에만 쓴다.
-     강조 한 가지: 이긴 값·핵심 숫자에 형광펜. 큰 숫자는 Archivo 압축체, 나머지는 IBM Plex Sans KR. */
+  /* 원칙: 블로그마다 고정 색 하나(내 블로그 파랑, 경쟁1 보라, 경쟁2 청록). 강조는 색과 굵기로만, 형광펜 없음.
+     화면에서 가장 눈에 띄는 것은 '제목 노출 보드' 하나. 나머지는 조용한 흰 패널과 막대·선 차트. */
   :root {
-    --bg: #f5f6f8; --surface: #ffffff; --ink: #14213d; --muted: #5b6475; --rule: #dfe3ea;
-    --hl: #ffe14d; --hl-strong: #e8b400; --me: #2747c9; --c1: #d9731c; --c2: #8b3fd9;
-    --ok: #17804b; --wait: #b7791f; --miss: #c2362f;
-    --ok-soft: #e3f3ea; --wait-soft: #fbf0d9; --miss-soft: #fbe5e3;
-    --text: var(--ink); --card: var(--surface); --line: var(--rule);
-    --accent: var(--me); --accent-soft: #e6eafb; --warn: var(--wait); --warn-soft: var(--wait-soft);
-    --s1: var(--me); --s2: var(--c1); --s3: var(--c2); --s4: #8a4fd1; --s5: #c23a7a;
-    --font: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-    --num: "Archivo", "IBM Plex Sans KR", sans-serif;
+    --bg: #f1f3f6; --surface: #ffffff; --ink: #172033; --muted: #5d6a7e; --faint: #8e9aad; --line: #e1e6ed; --line2: #eef1f5;
+    --me: #2f5bea; --c1: #8a4fd8; --c2: #0e98ad;
+    --ok: #1f9d63; --wait: #e0a01b; --miss: #e2483d; --empty: #e6eaf0;
+    --font: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-    --bg: #0f1420; --surface: #161c2a; --ink: #e8ecf4; --muted: #98a2b3; --rule: #273042;
-    --hl: #8a7414; --me: #7b93ff; --c1: #f29a4a; --c2: #c39bff;
-    --ok: #4cc38a; --wait: #e5b454; --miss: #ff7a70;
-    --ok-soft: #12301f; --wait-soft: #33290f; --miss-soft: #3a1714; --accent-soft: #1e2748; color-scheme: dark; } }
+    --bg: #0e131c; --surface: #161d29; --ink: #e7ecf3; --muted: #9aa6b8; --faint: #6f7b8e; --line: #263043; --line2: #1d2534;
+    --me: #6f8fff; --c1: #b88bff; --c2: #33c3d6; --ok: #3cc488; --wait: #f0b93f; --miss: #ff6b61; --empty: #243045; color-scheme: dark; } }
   :root[data-theme="dark"] {
-    --bg: #0f1420; --surface: #161c2a; --ink: #e8ecf4; --muted: #98a2b3; --rule: #273042;
-    --hl: #8a7414; --me: #7b93ff; --c1: #f29a4a; --c2: #c39bff;
-    --ok: #4cc38a; --wait: #e5b454; --miss: #ff7a70;
-    --ok-soft: #12301f; --wait-soft: #33290f; --miss-soft: #3a1714; --accent-soft: #1e2748; color-scheme: dark; }
+    --bg: #0e131c; --surface: #161d29; --ink: #e7ecf3; --muted: #9aa6b8; --faint: #6f7b8e; --line: #263043; --line2: #1d2534;
+    --me: #6f8fff; --c1: #b88bff; --c2: #33c3d6; --ok: #3cc488; --wait: #f0b93f; --miss: #ff6b61; --empty: #243045; color-scheme: dark; }
 
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
-  .wrap { max-width: 1120px; margin: 0 auto; padding-block: 28px 80px;
-    padding-left: max(20px, env(safe-area-inset-left, 0px)); padding-right: max(20px, env(safe-area-inset-right, 0px)); }
   a { color: inherit; }
-  :focus-visible { outline: 2px solid var(--me); outline-offset: 2px; }
+  button { font: inherit; }
+  .num, .v { font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 22px 20px 80px; }
   .hidden { display: none !important; }
-  .scroll { overflow-x: auto; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; color: var(--muted); }
+  :focus-visible { outline: 2px solid var(--me); outline-offset: 2px; }
 
-  /* 머리 */
-  h1 { font-size: 26px; line-height: 1.25; margin: 0; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
-  .sub { color: var(--muted); margin: 6px 0 22px; max-width: 62ch; text-wrap: pretty; word-break: keep-all; }
+  /* 상단 */
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .brand { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 9px; }
+  .brand i { display: inline-grid; grid-template-columns: repeat(3, 5px); gap: 2px; }
+  .brand i b { width: 5px; height: 14px; border-radius: 1.5px; background: var(--ok); }
+  .brand i b:nth-child(2) { background: var(--wait); height: 14px; } .brand i b:nth-child(3) { background: var(--miss); }
+  .account { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+  .btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 7px 13px; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: var(--faint); }
+  .btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  .btn:disabled { opacity: .6; cursor: default; }
 
-  /* 입력: 내 블로그 대 경쟁 블로그 */
-  form { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end;
-    background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 14px; }
-  .fields { display: contents; }
-  .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-  .flabel { font-size: 13px; color: var(--muted); font-weight: 600; }
-  .flabel.me { color: var(--me); }
-  form input { width: 100%; padding: 12px 14px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; }
-  form .field:first-child input { border: 1.5px solid var(--me); background: var(--surface); }
-  form input::placeholder { color: var(--muted); opacity: .8; }
-  button { font: inherit; font-weight: 600; cursor: pointer; border-radius: 10px; }
-  form button[type=submit] { padding: 12px 22px; border: 0; background: var(--ink); color: var(--bg); height: 47px; }
-  form button[type=submit]:disabled { opacity: .6; cursor: progress; }
-  button.ghost { padding: 9px 14px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); font-weight: 500; }
-  button.ghost:hover { border-color: var(--muted); }
-  @media (max-width: 860px) { form { grid-template-columns: 1fr; } form button[type=submit] { width: 100%; } }
-  .hint { color: var(--muted); font-size: 13px; line-height: 1.5; }
-  form + .hint { margin-top: 10px; max-width: 80ch; word-break: keep-all; }
-  .notice { color: var(--muted); font-size: 13px; margin-top: 4px; word-break: keep-all; }
-  .notice b { color: var(--ink); font-weight: 600; }
-  .error { background: var(--miss-soft); color: var(--miss); border-radius: 10px; padding: 10px 14px; margin-top: 14px; font-size: 14px; }
+  /* 입력 */
+  form#f { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 10px; align-items: end; }
+  .field { display: grid; gap: 6px; }
+  .flabel { font-size: 12.5px; font-weight: 600; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .flabel::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .field input { width: 100%; height: 44px; padding: 0 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 15px; }
+  .field input:focus { outline: none; border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
+  form#f .btn.primary { height: 44px; padding: 0 22px; font-size: 15px; border-radius: 10px; }
+  .formnote { margin: 9px 0 0; font-size: 12.5px; color: var(--faint); }
+  .error { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: color-mix(in srgb, var(--miss) 10%, var(--surface)); color: var(--miss); font-size: 14px; }
 
-  /* 섹션: 박스 대신 굵은 머리선 */
-  .card { margin-top: 44px; min-width: 0; }
-  .card > h2, .row-actions h2 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; text-wrap: balance; }
-  .card > h2 { padding-top: 14px; border-top: 2px solid var(--ink); }
-  .card h2 small { display: block; color: var(--muted); font-weight: 400; font-size: 13px; margin-top: 4px; letter-spacing: 0; }
-  .card > h2 + * { margin-top: 18px; }
-  .grid { display: grid; gap: 32px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-  .grid > .card { margin-top: 44px; }
-  .row-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; padding-top: 14px; border-top: 2px solid var(--ink); }
-  .row-actions input { flex: 1 1 220px; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
-  .meta { color: var(--muted); font-size: 13px; margin-top: 14px; }
-  .chart-box { position: relative; height: 250px; }
-
-  /* 단일 블로그 머리 */
-  .profile { display: flex; align-items: center; gap: 14px; min-width: 0; }
-  .profile img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; background: var(--bg); flex: none; }
-  .profile a { color: var(--ink); font-weight: 700; font-size: 21px; text-decoration: none; letter-spacing: -0.01em; }
-  .profile p { margin: 2px 0 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 0; margin-top: 20px; border-top: 1px solid var(--rule); }
-  .kpi { padding: 14px 14px 4px 0; }
-  .kpi .v { font-family: var(--num); font-stretch: 75%; font-weight: 700; font-size: 34px; line-height: 1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .kpi .l { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
-
-  /* 제목 노출: 30칸 띠 */
-  .expo { display: grid; grid-template-columns: minmax(0, 230px) minmax(0, 1fr); gap: 28px; align-items: start; }
-  @media (max-width: 720px) { .expo { grid-template-columns: 1fr; } }
-  .expo .big { font-family: var(--num); font-stretch: 75%; font-weight: 800; font-size: 72px; line-height: .95; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-  .expo .big small { font-size: 30px; color: var(--muted); font-weight: 600; margin-left: 2px; }
-  .expo .big mark { background: linear-gradient(transparent 52%, var(--hl) 52%, var(--hl) 86%, transparent 86%); color: inherit; padding: 0 .06em; margin-left: -.06em; }
-  .sq { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; }
-  @media (max-width: 720px) { .sq { grid-template-columns: repeat(10, minmax(0, 1fr)); } }
-  .sq span { height: 44px; border-radius: 3px; background: var(--rule); }
-  @media (max-width: 720px) { .sq span { height: 26px; } }
-  .sq-axis { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
-  .shown { background: var(--ok) !important; }
-  .pending { background: var(--wait) !important; }
-  .missing { background: var(--miss) !important; }
-  .rerr { background: var(--rule) !important; }
-  .lg { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); margin-top: 14px; }
-  .lg i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-  /* 상태 도장 */
-  .rk { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 1px 8px; border-radius: 4px; border: 1.5px solid currentColor; white-space: nowrap; background: transparent !important; }
-  .rk.shown { color: var(--ok); } .rk.pending { color: var(--wait); } .rk.missing { color: var(--miss); } .rk.rerr { color: var(--muted); }
-  .verify { font-size: 12.5px; color: var(--muted); white-space: nowrap; margin-left: 6px; }
-  .expoBtn { padding: 6px 12px; font-size: 13px; font-weight: 600; }
-
-  /* 진단 */
-  .diag { display: grid; gap: 0; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); border-top: 1px solid var(--rule); }
-  .diag > div { padding: 14px 16px 14px 0; border-bottom: 1px solid var(--rule); }
-  .diag .t { display: flex; justify-content: space-between; align-items: center; font-weight: 600; gap: 8px; }
-  .diag .d { color: var(--muted); font-size: 13px; margin-top: 6px; line-height: 1.5; }
-  .pill { font-size: 12px; padding: 2px 9px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
-  .pill.good { background: var(--ok-soft); color: var(--ok); }
-  .pill.mid { background: var(--wait-soft); color: var(--wait); }
-  .pill.bad { background: var(--miss-soft); color: var(--miss); }
-  .insights { margin: 0; padding-left: 18px; max-width: 78ch; }
-  .insights li { margin: 8px 0; line-height: 1.65; }
-  .insights b { font-weight: 700; }
-
-  /* 히트맵 */
-  .heat { min-width: 560px; display: grid; grid-template-columns: 28px repeat(24, 1fr); gap: 2px; font-size: 10px; font-variant-numeric: tabular-nums; }
-  .heat div { aspect-ratio: 1; border-radius: 2px; display: flex; align-items: center; justify-content: center; }
-  .heat .lbl { color: var(--muted); aspect-ratio: auto; }
-
-  /* 칩 */
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .chip { background: var(--surface); border: 1px solid var(--rule); color: var(--ink); border-radius: 6px; padding: 3px 9px; font-size: 13px; }
-  .chip b { color: var(--muted); margin-left: 5px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .chip.shared { border-color: var(--ink); }
-
-  /* 표 */
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-  th { color: var(--muted); font-weight: 500; white-space: nowrap; font-size: 13px; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  td a { color: var(--ink); text-decoration: none; } td a:hover { text-decoration: underline; }
-  #cmpTable thead th { vertical-align: bottom; color: var(--ink); font-weight: 700; font-size: 15px; padding-bottom: 12px; border-bottom: 2px solid var(--ink); }
-  #cmpTable thead th a { text-decoration: none; }
-  #cmpTable tr.sec td { color: var(--muted); font-size: 13px; font-weight: 600; padding-top: 22px; border-bottom: 1px solid var(--rule); }
-  mark.best { background: linear-gradient(transparent 52%, var(--hl) 52%); color: inherit; font-weight: 700; padding: 0 .2em; }
-
-  /* 블로그 칸 (비교) */
-  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; margin-bottom: 10px; }
-  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 7px; vertical-align: baseline; flex: none; }
-  .role { display: inline-block; font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 4px; margin-right: 7px; background: var(--bg); color: var(--muted); border: 1px solid var(--rule); vertical-align: 1px; }
-  .role.me { background: var(--me); color: #fff; border-color: var(--me); }
-  .role.c1 { background: var(--c1); color: #fff; border-color: var(--c1); }
-  .role.c2 { background: var(--c2); color: #fff; border-color: var(--c2); }
-  .cols { display: grid; gap: 14px; }
-  .col { background: var(--surface); border: 1px solid var(--rule); border-top: 4px solid var(--rc, var(--rule)); border-radius: 12px; padding: 16px; min-width: 0; }
-  .rc-me { --rc: var(--me); } .rc-c1 { --rc: var(--c1); } .rc-c2 { --rc: var(--c2); }
-  #cmpTable col.rc-me, #cmpTable col.rc-c1, #cmpTable col.rc-c2 { background: color-mix(in srgb, var(--rc) 7%, transparent); }
-  #cmpTable thead th.rc-me, #cmpTable thead th.rc-c1, #cmpTable thead th.rc-c2 { border-bottom: 3px solid var(--rc); }
-  .col h3 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; overflow-wrap: anywhere; }
-  .col h3 .cnt { margin-left: auto; font-size: 12.5px; font-weight: 400; color: var(--muted); }
-  .col .sub2 { font-size: 12.5px; color: var(--muted); margin: 16px 0 8px; font-weight: 600; }
-  .bar { display: grid; grid-template-columns: minmax(0, 1fr) 42px; gap: 8px; align-items: center; font-size: 13px; margin: 5px 0; }
-  .bar .track { position: relative; height: 24px; border-radius: 4px; background: var(--bg); overflow: hidden; }
-  .bar .fill { position: absolute; inset: 0 auto 0 0; opacity: .22; }
-  .bar .name { position: absolute; left: 8px; top: 2px; right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bar .pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
-  .plist { list-style: none; margin: 0; padding: 0; }
-  .plist li { padding: 10px 0; border-bottom: 1px solid var(--rule); }
-  .plist li:last-child { border-bottom: 0; }
-  .plist a { color: var(--ink); font-size: 14px; line-height: 1.45; text-decoration: none; display: block; overflow-wrap: anywhere; }
-  .plist a:hover { text-decoration: underline; }
-  .pm .sep { display: inline-block; width: 1px; height: 10px; background: var(--rule); margin: 0 8px; vertical-align: -1px; }
-  .plist .pm { font-size: 12px; color: var(--muted); margin-top: 4px; font-variant-numeric: tabular-nums; }
-
-  /* 블로그 머리: 대문 이미지 위에 한 줄 결론 */
-  .head { margin-top: 36px; background: var(--surface); border: 1px solid var(--rule); border-radius: 18px; overflow: hidden; }
-  .mast { position: relative; color: #fff; padding: 26px 28px 28px; min-height: 250px; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px;
-    background: #14213d center / cover no-repeat; isolation: isolate; }
-  .mast::before { content: ""; position: absolute; inset: 0; z-index: -1;
-    background: linear-gradient(90deg, rgba(12,18,32,.94) 0%, rgba(12,18,32,.82) 50%, rgba(12,18,32,.45) 100%); }
-  .mast .who { display: flex; align-items: center; gap: 14px; min-width: 0; }
-  .mast .who img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,.85); flex: none; background: #fff; }
-  .mast .name { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.3; overflow-wrap: anywhere; }
-  .mast .name a { color: #fff; text-decoration: none; }
-  .mast .facts { font-size: 13.5px; color: rgba(255,255,255,.78); margin-top: 2px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
-  .mast .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid rgba(255,255,255,.55); color: #fff; margin-left: 8px; vertical-align: 3px; }
-  .mast .role { vertical-align: 3px; }
-  .mast .verdict { font-size: clamp(22px, 3.2vw, 32px); font-weight: 700; line-height: 1.3; letter-spacing: -0.02em; margin: 14px 0 0; max-width: 30ch; word-break: keep-all; text-wrap: balance; }
-  .mast .verdict mark { background: var(--hl); color: #14213d; padding: 0 .16em; border-radius: 3px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-  .mast .why { font-size: 13.5px; color: rgba(255,255,255,.75); margin: 0; word-break: keep-all; }
-  .mast .open { position: absolute; top: 20px; right: 22px; background: #fff; color: #14213d; text-decoration: none; font-weight: 600; font-size: 14px; padding: 9px 16px; border-radius: 999px; }
-  @media (max-width: 640px) { .mast { padding: 70px 18px 20px; } .mast .open { top: 16px; right: 16px; } }
-  .head .kpis { margin: 0; padding: 6px 28px 4px; border-top: 0; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
-  .head .kpi { padding: 16px 12px 14px 0; border-bottom: 1px solid var(--rule); }
-  .kpi .v small { font-family: var(--font); font-size: 14px; font-weight: 600; color: var(--muted); margin-left: 3px; letter-spacing: 0; }
-  .kpi .n { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
-  .kpi .n.up { color: var(--ok); } .kpi .n.down { color: var(--miss); }
-  .head .meta { padding: 0 28px 18px; }
-  .expo-panel { padding: 22px 28px 26px; }
-  .expo-panel > h2 { font-size: 17px; margin: 0 0 18px; }
-  .expo-panel > h2 small { display: block; color: var(--muted); font-weight: 400; font-size: 13px; margin-top: 3px; }
-  @media (max-width: 640px) { .head .kpis, .expo-panel { padding-left: 18px; padding-right: 18px; } .head .meta { padding: 0 18px 16px; } }
-  .unoff { font-size: 12px; color: var(--muted); }
-
-  /* 방문자 추이 */
-  .visit { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 28px; align-items: start; }
-  @media (max-width: 720px) { .visit { grid-template-columns: 1fr; } }
-  .vstat { border-top: 1px solid var(--rule); }
-  .vstat div { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--rule); font-size: 14px; }
-  .vstat b { font-variant-numeric: tabular-nums; }
-  .visit .chart-box { height: 240px; }
-  .empty { color: var(--muted); font-size: 14px; max-width: 64ch; word-break: keep-all; }
-
-  /* 인기글 */
-  .top3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-  @media (max-width: 860px) { .top3 { grid-template-columns: 1fr; } }
-  .top3 a { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; color: var(--ink); text-decoration: none; min-width: 0; }
-  .top3 a:hover { border-color: var(--muted); }
-  .top3 .th { aspect-ratio: 16 / 9; background: var(--bg) center / cover no-repeat; position: relative; }
-  .top3 .rank { position: absolute; top: 10px; left: 10px; background: var(--ink); color: var(--surface); font-weight: 700; font-size: 13px; padding: 3px 10px; border-radius: 6px; }
-  .top3 .bd { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
-  .top3 .tt { font-weight: 600; line-height: 1.45; word-break: keep-all; overflow-wrap: anywhere; }
-  .top3 .vw { margin-top: auto; display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 13px; }
-  .top3 .vw b { font-family: var(--num); font-stretch: 75%; font-size: 30px; color: var(--ink); font-weight: 700; margin-right: 4px; }
-  .popsum { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-bottom: 16px; font-size: 14px; color: var(--muted); }
-  .popsum b { color: var(--ink); font-variant-numeric: tabular-nums; }
-
-  .watchrow { margin-top: 2px; }
-  .watchbtn { font: inherit; font-size: 12.5px; font-weight: 600; padding: 4px 11px; border-radius: 999px; cursor: pointer; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); }
-  .watchbtn.on { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
-  .watchbtn.on::before { content: "● "; }
-  .mast .watchbtn { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.5); }
-  .mast .watchbtn.on { background: rgba(76,195,138,.25); color: #fff; border-color: #4cc38a; }
-  .acc { margin-top: 22px; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
-  .acc > summary { cursor: pointer; padding: 14px 16px; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 10px; }
-  .acc > summary::-webkit-details-marker { display: none; }
-  .acc > summary::before { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; flex: none; }
-  .acc[open] > summary::before { transform: rotate(45deg); }
-  .acc > summary .hint { font-weight: 400; }
-  .acc[open] > :not(summary) { margin: 0 16px; }
-  .acc[open] .chart-box { margin-bottom: 16px; }
-  .popmini .sum { display: flex; justify-content: space-between; align-items: baseline; background: var(--bg); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
-  .popmini .sum b { font-family: var(--num); font-stretch: 75%; font-size: 26px; color: var(--ink); font-weight: 700; }
-  .popmini ol { list-style: none; margin: 0; padding: 0; }
-  .popmini li { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 8px 2px; border-bottom: 1px solid var(--rule); font-size: 13.5px; }
-  .popmini li:last-child { border-bottom: 0; }
-  .popmini .n { width: 20px; height: 20px; border-radius: 50%; background: var(--ink); color: var(--surface); font-size: 11.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-  .popmini a { color: var(--ink); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .popmini a:hover { text-decoration: underline; }
-  .popmini .v { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; }
-  .popmini details { margin-top: 6px; font-size: 13px; color: var(--muted); }
-  .popmini summary { cursor: pointer; padding: 4px 0; }
-
-  /* 계정·내 블로그 */
-  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .account { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
-  .account button { padding: 7px 14px; font-size: 13.5px; }
-  .loginbox, .mypanel { margin: 14px 0 18px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; }
-  .loginbox form { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; grid-template-columns: none; background: none; border: 0; padding: 0; }
-  .loginbox .field { flex: 1 1 220px; }
-  .loginbox form + .hint, .loginbox .hint { margin-top: 10px; }
-  .loginbox .hint a { color: var(--muted); }
-  .loginbox button.ghost { height: 47px; }
-  .social { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  /* 로그인·내 블로그 */
+  .loginbox, .mypanel { margin: 0 0 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .social { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
   .social:empty { display: none; }
   .social button { flex: 1 1 200px; height: 46px; border-radius: 10px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
   .social .naver { background: #03c75a; color: #fff; border: 0; }
   .social .naver b { font-weight: 900; font-size: 17px; }
   .social .google { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; }
-  .loginbox button[type=submit] { height: 47px; }
-  .mypanel h2 { font-size: 16px; margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .mypanel h2 { font-size: 15px; margin: 0 0 10px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
   .mypanel h2 small { font-weight: 400; color: var(--muted); font-size: 13px; }
-  .mylist { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-  .mychip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--rule); border-radius: 999px; padding: 5px 6px 5px 12px; font-size: 13.5px; background: var(--bg); }
+  .mylist { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .mychip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 6px 4px 11px; font-size: 13.5px; }
   .mychip.sel { border-color: var(--c1); }
-  .mychip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 6px; }
+  .mychip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 5px; }
   .mychip label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; }
-  form.myadd { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; grid-template-columns: none; background: none; border: 0; border-radius: 0; padding: 0; }
-  form.myadd button { height: auto; padding: 9px 16px; font-size: 14px; }
-  form.myadd button[type=submit] { background: var(--surface); color: var(--ink); border: 1px solid var(--rule); font-weight: 500; }
-  form.myadd #myCompare { background: var(--ink); color: var(--bg); border: 0; margin-left: auto; }
-  @media (max-width: 860px) { form.myadd #myCompare { margin-left: 0; width: 100%; } }
-  .myadd input, .myadd select { padding: 9px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
-  .myadd input { flex: 1 1 220px; }
-  .mymsg { margin-top: 8px; font-size: 13px; }
-  .mymsg.err { color: var(--miss); }
+  form.myadd { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .myadd input, .myadd select { height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 14px; }
+  .myadd #myCompare { margin-left: auto; }
+  .mymsg { margin: 10px 0 0; font-size: 13px; color: var(--muted); } .mymsg.err { color: var(--miss); }
 
-  /* 첫 화면: 결과 미리보기 */
-  #intro { margin-top: 56px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
-  @media (max-width: 860px) { #intro { grid-template-columns: 1fr; gap: 20px; } }
-  .intro-strip .sq span { height: 72px; }
-  @media (max-width: 720px) { .intro-strip .sq span { height: 34px; } }
-  .intro-copy h2 { font-size: 22px; line-height: 1.35; margin: 0; letter-spacing: -0.01em; text-wrap: balance; word-break: keep-all; }
-  .intro-copy p { color: var(--muted); margin: 10px 0 18px; max-width: 46ch; word-break: keep-all; }
+  /* 처음 화면 */
+  .intro { margin-top: 34px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 36px; align-items: center; }
+  .intro h2 { font-size: 26px; line-height: 1.35; letter-spacing: -0.02em; margin: 0 0 12px; }
+  .intro p { color: var(--muted); margin: 0 0 18px; max-width: 46ch; }
+  .intro .demo { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
 
-  /* 비교 화면 맨 위: 내 블로그 노출 */
+  /* 패널 */
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-top: 16px; }
+  .ph { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+  .ph h2 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+  .ph p { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .grid2 > .panel { margin-top: 16px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 14px 0; margin: 0; }
 
-  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  /* 블로그 카드 */
+  .blogs { display: grid; gap: 12px; margin-top: 22px; }
+  .bcard { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; position: relative; overflow: hidden; display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 4px 13px; }
+  .bcard::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--c); }
+  .bcard .av { width: 48px; height: 48px; border-radius: 50%; background: var(--empty) center / cover; grid-row: span 2; }
+  .bcard .role { font-size: 12px; font-weight: 700; color: var(--c); }
+  .bcard .nm { font-weight: 700; font-size: 16px; line-height: 1.3; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bcard .nm:hover { text-decoration: underline; }
+  .bcard .id { font-size: 12.5px; color: var(--faint); }
+  .tags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; align-items: center; }
+  .tag { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--line2); color: var(--muted); text-decoration: none; white-space: nowrap; }
+  .tag.yes { background: color-mix(in srgb, var(--ok) 13%, var(--surface)); color: var(--ok); font-weight: 600; }
+  a.tag:hover { text-decoration: underline; }
+  .watch { grid-column: 1 / -1; margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+  .watchbtn { font: inherit; font-size: 12.5px; font-weight: 600; padding: 4px 11px; border-radius: 999px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+  .watchbtn.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+  .watchbtn.on::before { content: "● "; }
+
+  /* 제목 노출 보드 */
+  .ph .verdict { font-size: 21px; color: var(--ink); font-weight: 700; letter-spacing: -0.02em; line-height: 1.4; margin: 0 0 4px; }
+  .verdict .n { color: var(--ok); } .verdict .m { color: var(--miss); }
+  .erow { display: grid; grid-template-columns: 170px minmax(0, 1fr) 190px; gap: 16px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line2); }
+  .erow:first-of-type { border-top: 0; }
+  .who { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; min-width: 0; }
+  .who span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); flex: none; display: inline-block; }
+  .strip { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; }
+  .strip > * { height: 30px; border-radius: 3px; background: var(--empty); display: block; }
+  .strip .shown { background: var(--ok); } .strip .pending { background: var(--wait); } .strip .missing { background: var(--miss); }
+  .strip .rerr { background: repeating-linear-gradient(45deg, var(--empty) 0 4px, var(--line) 4px 8px); }
+  .strip a.missing:hover, .strip a.pending:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .strip .loading { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) { .strip .loading { animation: none; } }
+  .ecount { display: flex; gap: 14px; justify-content: flex-end; font-size: 13px; color: var(--muted); }
+  .ecount b { font-size: 20px; color: var(--ink); margin-right: 2px; }
+  .ecount .ok b { color: var(--ok); } .ecount .ms b { color: var(--miss); }
+  .eaxis { display: grid; grid-template-columns: 170px minmax(0, 1fr) 190px; gap: 16px; font-size: 11.5px; color: var(--faint); }
+  .eaxis div { display: flex; justify-content: space-between; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--muted); align-items: center; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .note { font-size: 12.5px; color: var(--faint); margin: 12px 0 0; max-width: 90ch; }
+
+  /* 핵심 지표 (비교) */
+  .score { display: grid; }
+  .srow { display: grid; grid-template-columns: 190px repeat(var(--n), minmax(0, 1fr)); gap: 18px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line2); }
+  .srow.head { border-top: 0; padding-top: 0; }
+  .srow.grp { border-top: 0; padding: 18px 0 4px; font-size: 12.5px; font-weight: 700; color: var(--faint); }
+  .srow.grp:first-child { padding-top: 0; }
+  .slabel { font-size: 14px; color: var(--muted); }
+  .slabel small { display: block; font-size: 11.5px; color: var(--faint); }
+  .cell .v { font-size: 15px; font-weight: 500; color: var(--muted); }
+  .cell.lead .v { font-weight: 700; color: var(--ink); }
+  .cell .bar { height: 5px; border-radius: 3px; background: var(--line2); margin-top: 5px; overflow: hidden; }
+  .cell .bar i { display: block; height: 100%; background: var(--c); border-radius: 3px; }
+  .cell .sub { font-size: 12px; color: var(--faint); }
+  /* 핵심 지표 (블로그 1개) */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0; border-top: 1px solid var(--line2); }
+  .tile { padding: 14px 16px 14px 0; border-bottom: 1px solid var(--line2); }
+  .tile .v { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
+  .tile .v small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+  .tile .l { font-size: 13px; color: var(--muted); }
+  .tile .sub { font-size: 12px; color: var(--faint); }
+
+  /* 차트 */
+  .chart { position: relative; height: 240px; }
+  .chart.tall { height: 280px; }
+  details.fold > summary { cursor: pointer; font-size: 14px; color: var(--muted); padding: 4px 0; }
+  details.fold[open] > summary { margin-bottom: 10px; }
+
+  /* 블로그별 칸 */
+  .cols { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 26px; }
+  .colh { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid var(--c); }
+  .colh .r { margin-left: auto; font-weight: 500; color: var(--muted); font-size: 13px; }
+  .colh .r b { color: var(--ink); font-size: 16px; }
+  .plist { list-style: none; margin: 0; padding: 0; }
+  .plist li { display: grid; grid-template-columns: 18px 38px minmax(0, 1fr); gap: 9px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line2); }
+  .plist li:first-child { border-top: 0; }
+  .plist .rk { font-size: 12px; color: var(--faint); text-align: right; font-variant-numeric: tabular-nums; }
+  .plist .th { width: 38px; height: 38px; border-radius: 6px; background: var(--line2) center / cover; }
+  .plist .tt { font-size: 13.5px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; text-decoration: none; }
+  .plist .tt:hover { text-decoration: underline; }
+  .plist .vb { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .plist .vb i { height: 4px; border-radius: 2px; background: var(--c); opacity: .8; }
+  .plist .vb span { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .catbar { display: grid; grid-template-columns: minmax(0, 1fr) 40px; gap: 8px; align-items: center; font-size: 13px; padding: 4px 0; }
+  .catbar .tr { position: relative; height: 22px; border-radius: 5px; background: var(--line2); overflow: hidden; }
+  .catbar .tr i { position: absolute; inset: 0 auto 0 0; background: color-mix(in srgb, var(--c) 22%, transparent); }
+  .catbar .tr span { position: relative; padding: 0 8px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .catbar .p { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sub2 { font-size: 12.5px; font-weight: 700; color: var(--faint); margin: 16px 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { font-size: 12.5px; padding: 3px 9px; border-radius: 6px; background: var(--line2); color: var(--ink); }
+  .chip b { font-weight: 600; color: var(--faint); margin-left: 4px; font-size: 11.5px; }
+  .chip.shared { box-shadow: inset 0 0 0 1.5px var(--ink); }
+
+  /* 게시물 */
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; background: var(--surface); padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+  .tools input { height: 34px; padding: 0 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 13.5px; width: 220px; }
+  .scroll { overflow-x: auto; }
+  table.posts { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .posts th { text-align: left; font-weight: 600; font-size: 12px; color: var(--faint); padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .posts td { padding: 9px 10px; border-bottom: 1px solid var(--line2); vertical-align: top; }
+  .posts td.num, .posts th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .posts td.d .dot { display: none; }
+  .posts td.d { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .posts td.t a { text-decoration: none; } .posts td.t a:hover { text-decoration: underline; }
+  .posts td.t .c { display: block; font-size: 12px; color: var(--faint); }
+  .st { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 12.5px; }
+  .st::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--empty); }
+  .st.shown::before { background: var(--ok); } .st.pending::before { background: var(--wait); } .st.missing::before { background: var(--miss); }
+  .st.missing { color: var(--miss); font-weight: 600; }
+  .st a { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 2px; }
+  .more { text-align: center; margin-top: 14px; }
+  .foot { font-size: 12.5px; color: var(--faint); margin-top: 18px; line-height: 1.7; }
+
+  @media (max-width: 860px) {
+    .wrap { padding: 16px 16px 60px; }
+    form#f { grid-template-columns: 1fr; }
+    .intro { grid-template-columns: 1fr; gap: 20px; }
+    .grid2 { grid-template-columns: 1fr; gap: 0; }
+    .panel { padding: 18px 16px; }
+    .erow, .eaxis { grid-template-columns: 1fr; gap: 8px; }
+    .eaxis > :first-child, .eaxis > :last-child { display: none; }
+    .ecount { justify-content: flex-start; }
+    .strip > * { height: 24px; }
+    .srow { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 4px 12px; }
+    .srow > .slabel { grid-column: 1 / -1; }
+    .srow.head > .slabel { display: none; }
+    .cols { grid-template-columns: 1fr; gap: 28px; }
+    .tools input { width: 100%; }
+    .myadd #myCompare { margin-left: 0; width: 100%; }
+    /* 게시물 표는 휴대폰에서 카드처럼: 제목을 맨 위 한 줄로 */
+    .posts thead { display: none; }
+    .posts tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 11px 0; border-bottom: 1px solid var(--line2); }
+    .posts td { border: 0; padding: 0; }
+    .posts td.t { order: -1; flex: 1 1 100%; }
+    .posts td.dotc { display: none; }
+    .posts td.d .dot { display: inline-block; }
+    .posts td.t .c { display: inline; margin-left: 6px; }
+    .posts td.num::before { content: attr(data-l) " "; color: var(--faint); font-size: 12px; }
+    .posts td.num[data-l="조회"] { margin-left: auto; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="topbar"><h1>블로그 발행 분석기</h1><div id="account" class="account"></div></div>
+  <header class="top">
+    <div class="brand"><i aria-hidden="true"><b></b><b></b><b></b></i>블로그 발행 분석기</div>
+    <div id="account" class="account"></div>
+  </header>
   <div id="loginBox" class="loginbox hidden">
     <div class="social" id="socialBtns"></div>
-    <p class="hint" id="loginMsg">처음이면 자동으로 가입돼요. 같은 이메일이면 구글·네이버 어느 쪽으로 들어와도 같은 계정이에요.</p>
+    <p class="small" id="loginMsg" style="margin:0">처음이면 자동으로 가입돼요. 같은 이메일이면 구글·네이버 어느 쪽으로 들어와도 같은 계정이에요.</p>
   </div>
   <section id="myPanel" class="mypanel hidden" aria-label="내 블로그"></section>
-  <p class="sub">내 블로그와 경쟁 블로그를 넣으면 최근 글 30개의 발행 주기와 제목 노출 상태를 나란히 비교합니다.</p>
 
   <form id="f">
-    <div class="fields">
-      <label class="field"><span class="flabel me">내 블로그</span><input id="qMe" type="text" placeholder="예: blog.naver.com/아이디 또는 아이디" autocomplete="off" /></label>
-      <label class="field"><span class="flabel">경쟁 블로그 1</span><input id="qC1" type="text" placeholder="선택" autocomplete="off" /></label>
-      <label class="field"><span class="flabel">경쟁 블로그 2</span><input id="qC2" type="text" placeholder="선택" autocomplete="off" /></label>
-    </div>
-    <button type="submit">분석하기</button>
+    <label class="field" style="--c:var(--me)"><span class="flabel">내 블로그</span><input id="qMe" type="text" placeholder="blog.naver.com/아이디 또는 아이디" autocomplete="off" /></label>
+    <label class="field" style="--c:var(--c1)"><span class="flabel">경쟁 블로그 1</span><input id="qC1" type="text" placeholder="선택" autocomplete="off" /></label>
+    <label class="field" style="--c:var(--c2)"><span class="flabel">경쟁 블로그 2</span><input id="qC2" type="text" placeholder="선택" autocomplete="off" /></label>
+    <button type="submit" class="btn primary">분석하기</button>
   </form>
-  <div class="hint">블로그 주소를 붙여넣어도 되고 아이디만 써도 됩니다. 제목 노출은 내 블로그만 바로 확인하고, 경쟁 블로그는 결과 화면에서 버튼을 눌러 확인합니다.</div>
-  <div class="notice">이웃 수, 방문자 수, 공감과 댓글 수는 네이버 모바일 화면의 비공식 데이터라 가끔 비어 있을 수 있어요.</div>
+  <p class="formnote">주소를 붙여넣거나 아이디만 써도 돼요. 이웃·방문자·공감 수는 네이버 모바일 화면의 비공식 값이라 가끔 비어 있을 수 있어요.</p>
   <div id="err" class="error hidden"></div>
 
-  <section id="intro" aria-label="분석하면 보이는 것">
-    <div class="intro-strip" aria-hidden="true">
-      <div class="sq"><span class="pending"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="missing"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="missing"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="missing"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span><span class="shown"></span></div>
-      <div class="sq-axis"><span>최신 글</span><span>30번째 글</span></div>
+  <section id="intro" class="intro">
+    <div>
+      <h2>최근 글 30개가 검색에 나오는지, 경쟁 블로그와 무엇이 다른지 한 화면에서 봅니다</h2>
+      <p>칸 하나가 글 하나예요. 초록은 정상, 노랑은 반영중, 빨강은 누락입니다. 그 아래에 방문자, 지난주 인기글 조회수, 발행 요일과 시간대를 블로그별 색으로 나란히 비교합니다.</p>
+      <button type="button" class="btn" id="demo">예시 블로그로 보기</button>
     </div>
-    <div class="intro-copy">
-      <h2>최근 글 30개가 검색에 나오는지 한눈에 보여줍니다</h2>
-      <p>칸 하나가 글 하나예요. 초록은 정상, 노랑은 반영중, 빨강은 누락입니다. 아래로는 경쟁 블로그와 발행 주기, 요일과 시간대, 카테고리와 태그를 나란히 비교합니다.</p>
-      <button type="button" class="ghost" id="demo">예시 블로그로 결과 보기</button>
+    <div class="demo" aria-hidden="true">
+      <div class="who" style="--c:var(--me);margin-bottom:8px"><span class="dot"></span><span>내 블로그</span></div>
+      <div class="strip" id="introStrip"></div>
+      <div class="ecount" style="justify-content:flex-start;margin-top:10px"><span class="ok"><b>26</b>정상</span><span><b>1</b>반영중</span><span class="ms"><b>3</b>누락</span></div>
     </div>
   </section>
 
-  <div id="cmpView" class="hidden">
-    <section class="head" id="cmpExpoSec">
-      <section class="mast" id="cmpMast"></section>
-      <div class="expo-panel"><h2>최근 글 30개 제목 노출 <small id="cmpExpoName"></small></h2><div id="cmpExpo"></div></div>
+  <main id="report" class="hidden">
+    <section class="blogs" id="sBlogs"></section>
+
+    <section class="panel" id="sExpo">
+      <div class="ph"><div><p class="verdict" id="verdict"></p><p id="verdictSub"></p></div></div>
+      <div id="expoRows"></div>
+      <div class="eaxis"><span></span><div><span>최신 글</span><span>30번째 글</span></div><span></span></div>
+      <div class="legend" style="margin-top:14px"><span><i style="background:var(--ok)"></i>정상: 검색에 나옴</span><span><i style="background:var(--wait)"></i>반영중: 발행 1시간 이내, 아직 검색에 없음</span><span><i style="background:var(--miss)"></i>누락: 1시간이 지났는데 검색에 없음</span></div>
+      <p class="note">검색 API가 실제 블로그 탭에 있는 글을 빠뜨리기도 해요. 빨간 칸을 누르면 네이버 블로그 탭에서 그 제목을 바로 검색해 직접 확인할 수 있어요.</p>
     </section>
-    <div class="card">
-      <h2>블로그 비교 <small>형광펜이 칠해진 값이 그 항목에서 가장 좋은 블로그입니다</small></h2>
-      <div class="scroll"><table id="cmpTable"></table></div>
-      <div class="meta" id="cmpMeta"></div>
-      <p class="hint hidden" id="cmpWeekHint" style="margin-top:8px">글을 자주 쓰는 블로그가 있어 최근 글 30개가 덮는 공통 기간이 4주가 안 돼요. 그래서 주차별 추이 차트는 숨기고, 발행 빈도는 위 표의 주 평균 발행과 발행 간격으로 비교합니다.</p>
-    </div>
-    <div class="card">
-      <h2>지난주 인기글 조회수 <small>네이버가 블로그마다 공개하는 인기글 10개의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</small></h2>
-      <div class="scroll"><div class="cols" id="cmpPop"></div></div>
-    </div>
-    <div class="card">
-      <h2>방문자 비교 <small>오늘 방문자는 모든 블로그를, 날짜별 추이는 값이 있는 블로그만 보여줘요.</small></h2>
-      <div id="cmpVisit"></div>
-    </div>
-    <div class="card">
-      <h2>주차별 발행 추이 <small id="cmpWeekNote">모든 블로그의 데이터가 있는 기간만 비교합니다</small></h2>
-      <div class="legend" id="cmpLegend"></div>
-      <div class="chart-box" style="height:280px"><canvas id="cmpWeek" aria-label="블로그별 주차별 발행 수 선 차트"></canvas></div>
-    </div>
-    <div class="grid" style="margin-top:16px">
-      <div class="card"><h2>요일별 발행 비중 <small>각 블로그 글 수 대비 %</small></h2><div class="chart-box"><canvas id="cmpDay" aria-label="요일별 발행 비중 막대 차트"></canvas></div></div>
-      <div class="card"><h2>시간대별 발행 비중 <small>한국시간, 각 블로그 글 수 대비 %</small></h2><div class="chart-box"><canvas id="cmpHour" aria-label="시간대별 발행 비중 선 차트"></canvas></div></div>
-    </div>
-    <div class="card">
-      <h2>카테고리와 태그 <small>테두리가 있는 태그는 다른 블로그도 쓴 공통 태그</small></h2>
-      <div class="scroll"><div class="cols" id="cmpCols"></div></div>
-    </div>
-    <div class="card">
-      <div class="row-actions">
-        <h2 style="margin:0">게시물 <small>블로그별 최신순</small></h2>
-        <input id="cmpFilter" type="text" placeholder="제목·태그·카테고리 검색" />
-        <button class="ghost" id="cmpCsv" type="button">CSV 다운로드</button>
-      </div>
-      <div class="scroll"><div class="cols" id="cmpPosts"></div></div>
-      <div style="text-align:center;margin-top:12px"><button class="ghost" id="cmpMore" type="button" hidden>더 보기</button></div>
-    </div>
-  </div>
-  <div id="result" class="hidden">
-    <div class="head">
-      <section class="mast" id="mast"></section>
-      <div class="kpis" id="kpis"></div>
-      <div class="meta" id="meta"></div>
-    </div>
-    <div class="card" id="expoCard">
-      <h2>제목 노출 <small>최근 글 30개 제목을 블로그 검색에 넣어 내 글이 나오는지 확인합니다 (네이버 검색 API 기준)</small></h2>
-      <div id="expo"></div>
-    </div>
-    <div class="card">
-      <h2>방문자 추이 <small id="visitNote">날짜별 방문자 수예요.</small></h2>
+
+    <section class="panel">
+      <div class="ph"><div><h2>핵심 지표</h2><p id="scoreSub">막대는 같은 줄에서 가장 큰 값을 기준으로 한 길이예요.</p></div></div>
+      <div id="score"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><div><h2>날짜별 방문자</h2><p id="visitSub">블로그에 공개된 방문자 위젯과, 매일 저장한 누적 방문자 수로 계산해요.</p></div><div class="legend" id="visitLegend"></div></div>
       <div id="visit"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><div><h2>지난주 인기글</h2><p>네이버가 블로그마다 공개하는 인기글 10개의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</p></div></div>
+      <div class="cols" id="pop"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="panel">
+        <div class="ph"><div><h2>요일별 발행</h2><p>최근 글 중 요일별 비중</p></div></div>
+        <div class="chart"><canvas id="cDay" aria-label="요일별 발행 비중 막대 차트"></canvas></div>
+      </section>
+      <section class="panel">
+        <div class="ph"><div><h2>시간대별 발행</h2><p>한국시간, 최근 글 중 시간대별 비중</p></div></div>
+        <div class="chart"><canvas id="cHour" aria-label="시간대별 발행 비중 선 차트"></canvas></div>
+      </section>
     </div>
-    <div class="card">
-      <h2>지난주 인기글 조회수 <small>네이버가 블로그에 공개하는 인기글(최대 10개)의 조회수예요. 다른 글의 조회수는 공개되지 않아요.</small></h2>
-      <div id="pop"></div>
-    </div>
-    <div class="card">
-      <h2>운영 진단 <small>이 도구가 정한 참고 기준이며, 노출·성과와의 관계는 검증되지 않았습니다</small></h2>
-      <div class="diag" id="diag"></div>
-    </div>
-    <div class="card">
-      <h2>자동 인사이트 <small>RSS 범위 내 데이터 기준</small></h2>
-      <ul class="insights" id="insights"></ul>
-    </div>
-    <div class="grid" style="margin-top:16px">
-      <div class="card" id="weekCard"><h2>주차별 발행 수</h2><div class="chart-box"><canvas id="cWeek"></canvas></div></div>
-      <div class="card"><h2>카테고리 분포</h2><div class="chart-box"><canvas id="cCat"></canvas></div></div>
-    </div>
-    <div class="card">
-      <h2>요일 × 시간대 발행 히트맵 <small>한국시간 기준</small></h2>
-      <div class="scroll"><div id="heat" class="heat"></div></div>
-    </div>
-    <div class="grid" style="margin-top:16px">
-      <div class="card"><h2>태그 TOP 20</h2><div class="chips" id="tags"></div></div>
-      <div class="card"><h2>제목 키워드 TOP 20 <small>단순 어절 빈도</small></h2><div class="chips" id="words"></div></div>
-    </div>
-    <div class="card">
-      <div class="row-actions">
-        <h2 style="margin:0">게시물 목록</h2>
-        <input id="filter" type="text" placeholder="제목·태그·카테고리 검색" />
-        <button class="ghost" id="csv" type="button">CSV 다운로드</button>
-      </div>
-      <div class="scroll"><table id="posts"></table></div>
-    </div>
-  </div>
+    <section class="panel hidden" id="weekPanel">
+      <div class="ph"><div><h2>주차별 발행 수</h2><p id="weekSub"></p></div></div>
+      <div class="chart"><canvas id="cWeek" aria-label="주차별 발행 수 차트"></canvas></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><div><h2>카테고리와 태그</h2><p id="tagSub">최근 글 30개 기준</p></div></div>
+      <div class="cols" id="cats"></div>
+    </section>
+
+    <section class="panel">
+      <div class="ph"><div><h2>게시물</h2><p>최신순, 블로그별 최근 글 30개</p></div>
+        <div class="tools"><div class="seg" id="postSeg"></div><input id="filter" type="search" placeholder="제목·태그·카테고리 검색" /><button class="btn" id="csv" type="button">CSV 받기</button></div></div>
+      <div class="scroll"><table class="posts" id="posts"></table></div>
+      <div class="more"><button class="btn" id="more" type="button" hidden>더 보기</button></div>
+    </section>
+    <p class="foot" id="foot"></p>
+  </main>
 </div>
 
 <script>
-const MIN_WEEKS = 4; // 주차별 차트는 4주 이상일 때만 의미가 있어 보여준다
-const POST_LIMIT = 30; // 보고서는 최근 글 30개 기준 (제목 노출 확인과 같은 범위)
+const MIN_WEEKS = 4;
+const POST_LIMIT = 30;
 const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
-const STOP = new Set(['그리고','하는','있는','위한','대한','이번','에서','으로','하기','합니다','입니다','the','and','for','with']);
-let blogs = [];      // { data, stats }
-let current = 0;
-let charts = [];
+let blogs = [];      // { data, stats, role, expo, prof, vis, watch }
 
 function parseIds(input) {
   return [...new Set(input.split(/[,\s]+/).map((s) => {
@@ -447,63 +346,59 @@ function parseIds(input) {
     return s.replace(/^@/, '');
   }).filter(Boolean))].slice(0, 5);
 }
-
-// pubDate(ISO, UTC) → 한국시간 기준 요소
 function kst(iso) {
   const d = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
   return { y: d.getUTCFullYear(), mo: d.getUTCMonth(), d: d.getUTCDate(), day: d.getUTCDay(), h: d.getUTCHours(), date: d };
 }
 const fmtDate = (iso) => { const k = kst(iso); return `${k.y}.${String(k.mo + 1).padStart(2, '0')}.${String(k.d).padStart(2, '0')} ${String(k.h).padStart(2, '0')}시`; };
+const shortDate = (iso) => { const k = kst(iso); return `${k.mo + 1}.${k.d} ${String(k.h).padStart(2, '0')}시`; };
 const countBy = (arr) => arr.reduce((m, k) => (m.set(k, (m.get(k) || 0) + 1), m), new Map());
 const topN = (map, n) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
 const r1 = (n) => Math.round(n * 10) / 10;
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtN = (v) => v == null ? '-' : typeof v === 'number' ? v.toLocaleString('ko-KR') : v;
+const $ = (id) => document.getElementById(id);
 
 function analyze(data) {
   const items = [...data.items].sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate)).slice(0, POST_LIMIT);
-  const n = items.length;
-  const s = { n };
+  const n = items.length, s = { n, items };
   if (!n) return s;
   const times = items.map((i) => new Date(i.pubDate).getTime());
   const newest = times[0], oldest = times[n - 1];
   s.spanDays = Math.max(1, (newest - oldest) / 864e5);
   s.perWeek = n > 1 ? r1((n - 1) / s.spanDays * 7) : 0;
-  const gaps = times.slice(0, -1).map((t, i) => (t - times[i + 1]) / 864e5);
-  s.avgGap = gaps.length ? r1(gaps.reduce((a, b) => a + b, 0) / gaps.length) : 0;
-  s.maxGap = gaps.length ? r1(Math.max(...gaps)) : 0;
-  const sorted = [...gaps].sort((a, b) => a - b);
-  s.medGapRaw = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
-  s.medGap = sorted.length ? r1(s.medGapRaw) : 0;
-  s.daysSinceLast = r1((Date.now() - newest) / 864e5);
-  s.last30 = times.filter((t) => Date.now() - t <= 30 * 864e5).length;
+  const gaps = times.slice(0, -1).map((t, i) => (t - times[i + 1]) / 864e5).sort((a, b) => a - b);
+  s.medGapRaw = gaps.length ? gaps[Math.floor(gaps.length / 2)] : null;
+  s.daysSinceLast = (Date.now() - newest) / 864e5;
   s.newest = items[0].pubDate; s.oldest = items[n - 1].pubDate;
   s.cats = countBy(items.map((i) => i.category));
   s.tags = countBy(items.flatMap((i) => i.tags));
   s.avgTags = r1(items.reduce((a, i) => a + i.tags.length, 0) / n);
   s.noTag = items.filter((i) => !i.tags.length).length;
-  s.thumbRate = Math.round(items.filter((i) => i.thumbnail).length / n * 100);
-  s.avgTitle = Math.round(items.reduce((a, i) => a + i.title.length, 0) / n);
-  s.words = countBy(items.flatMap((i) => i.title
-    .replace(/[\[\]()<>{}"'“”‘’.,!?~:;|/\\·…\-_+=#@*&%^]/g, ' ')
-    .split(/\s+/).map((w) => w.trim().toLowerCase())
-    .filter((w) => w.length >= 2 && !STOP.has(w) && !/^\d+$/.test(w))));
   s.heat = Array.from({ length: 7 }, () => Array(24).fill(0));
   items.forEach((i) => { const k = kst(i.pubDate); s.heat[k.day][k.h]++; });
-  const byDay = s.heat.map((r) => r.reduce((a, b) => a + b, 0));
-  const byHour = Array.from({ length: 24 }, (_, h) => s.heat.reduce((a, r) => a + r[h], 0));
-  s.topDayCnt = Math.max(...byDay); s.topDays = byDay.map((v, i) => v === s.topDayCnt ? i : -1).filter((i) => i >= 0);
-  s.topHourCnt = Math.max(...byHour); s.topHours = byHour.map((v, i) => v === s.topHourCnt ? i : -1).filter((i) => i >= 0);
-  // 주차별(월요일 시작) 발행 수
-  const weekKey = (iso) => { const k = kst(iso); const d = k.date; const dow = (d.getUTCDay() + 6) % 7;
-    const mon = new Date(Date.UTC(k.y, k.mo, k.d - dow)); return mon.toISOString().slice(0, 10); };
-  const wk = countBy(items.map((i) => weekKey(i.pubDate)));
-  const weeks = []; let w = new Date(weekKey(s.oldest) + 'T00:00:00Z'); const end = new Date(weekKey(s.newest) + 'T00:00:00Z');
-  while (w <= end) { const key = w.toISOString().slice(0, 10); weeks.push([key.slice(5).replace('-', '/'), wk.get(key) || 0]); w = new Date(w.getTime() + 7 * 864e5); }
-  s.weeks = weeks;
-  s.zeroWeeks = weeks.filter((x) => x[1] === 0).length;
-  s.items = items;
   return s;
 }
+
+// ---- 공통 표시 도우미 ----
+const ROLE = { me: '내 블로그', c1: '경쟁 블로그 1', c2: '경쟁 블로그 2' };
+const cssv = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const colorOf = (b) => cssv('--' + (b.role || 'me'));
+const cv = (b) => `--c:var(--${b.role || 'me'})`;
+const nameOf = (b) => b.data.channel.title || b.data.blogId;
+const who = (b) => `<div class="who" style="${cv(b)}"><span class="dot"></span><span>${esc(nameOf(b))}</span></div>`;
+const blogLink = (b) => b.data.channel.link || 'https://blog.naver.com/' + b.data.blogId;
+const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
+const profLoading = (b) => !b.prof || b.prof.status === 'loading';
+const profile = (b) => (b.prof && b.prof.status === 'ok' ? b.prof.data.profile : null);
+const logNoOfItem = (it) => (it.link.match(/\/(\d{9,})/) || [])[1];
+const reactOf = (b, it) => (b.prof && b.prof.map ? b.prof.map.get(logNoOfItem(it)) : null);
+const naverBlogSearch = (title) => 'https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(title);
+const gapText = (g) => g == null ? '-' : g * 24 < 1 ? `${Math.max(1, Math.round(g * 1440))}분` : g < 1 ? `${Math.round(g * 24)}시간` : `${r1(g)}일`;
+const agoText = (d) => d * 24 < 1 ? `${Math.max(1, Math.round(d * 1440))}분 전` : d < 1 ? `${Math.round(d * 24)}시간 전` : `${Math.round(d)}일 전`;
+const CH = {};
+function chart(key, el, cfg) { if (CH[key]) CH[key].destroy(); CH[key] = el ? new Chart(el, cfg) : null; return CH[key]; }
+function chartBase() { Chart.defaults.color = cssv('--muted'); Chart.defaults.borderColor = cssv('--line2'); Chart.defaults.font.family = cssv('--font'); Chart.defaults.font.size = 12; }
 
 // ---- 제목 노출 (검색 API) ----
 const ST = { shown: '정상', pending: '반영중', missing: '누락', error: '확인 실패' };
@@ -514,12 +409,9 @@ function expoSummary(e) {
   return { ...c, n: e.results.length - c.error };
 }
 const EXPO_BATCH = 6;
-function expoRefresh(b) {
-  if (!blogs.includes(b)) return;
-  if (blogs.length === 1) { renderExpo(); renderPosts(); renderMast(document.getElementById('mast'), b); renderKpis(b); } else renderCompare(true);
-}
+function expoRefresh(b) { if (!blogs.includes(b)) return; rExpo(); rPosts(); }
 async function fetchExpoBatch(id, offset) {
-  for (let t = 0; t < 3; t++) {          // 요청 자체가 실패하면 2번 더 시도
+  for (let t = 0; t < 3; t++) {
     try {
       const r = await fetch(`/api/exposure?v=8&id=${encodeURIComponent(id)}&offset=${offset}&limit=${EXPO_BATCH}${t ? '&retry=' + Date.now() : ''}`);
       const body = await r.json();
@@ -534,18 +426,17 @@ async function loadExposure(b, force) {
   if (b.expo && !force) return;
   const total = Math.min(POST_LIMIT, b.stats.n || 0);
   const prev = force && b.expo && b.expo.data ? b.expo.data.results : [];
-  b.expo = { status: 'loading', done: 0, total, data: { results: [], display: 30, pendingHours: 48 }, map: new Map() };
+  b.expo = { status: 'loading', done: 0, total, data: { results: [] }, map: new Map() };
   expoRefresh(b);
   for (let off = 0; off < total; off += EXPO_BATCH) {
-    // 다시 확인일 때는 이미 성공한 구간은 건너뛴다
     const keep = prev.slice(off, off + EXPO_BATCH);
     let rows;
-    if (keep.length && keep.every((x) => !x.error)) rows = keep;
+    if (keep.length && keep.every((x) => x.status !== 'error')) rows = keep;
     else {
       const r = await fetchExpoBatch(b.data.blogId, off);
       if (r.fatal) { b.expo = { status: r.body.code === 'no_key' ? 'nokey' : 'error', message: r.body.error }; expoRefresh(b); return; }
-      if (r.ok) { rows = r.body.results; Object.assign(b.expo.data, { checkedAt: r.body.checkedAt, display: r.body.display, pendingHours: r.body.pendingHours }); }
-      else rows = b.stats.items.slice(off, off + EXPO_BATCH).map((it) => ({ logNo: (it.link.match(/\/(\d{9,})/) || [])[1], title: it.title, pubDate: it.pubDate, status: 'error', error: '연결 실패' }));
+      if (r.ok) { rows = r.body.results; b.expo.data.checkedAt = r.body.checkedAt; }
+      else rows = b.stats.items.slice(off, off + EXPO_BATCH).map((it) => ({ logNo: logNoOfItem(it), title: it.title, pubDate: it.pubDate, status: 'error', error: '연결 실패' }));
     }
     rows.forEach((x) => { b.expo.data.results.push(x); b.expo.map.set(x.logNo, x); });
     b.expo.done = b.expo.data.results.length;
@@ -556,139 +447,341 @@ async function loadExposure(b, force) {
   expoRefresh(b);
   saveExpoOnce(b);
 }
-function expoRankCell(b, item) {
-  if (!b.expo || !b.expo.map) return '';
-  const logNo = (item.link.match(/\/(\d{9,})/) || [])[1];
-  const x = b.expo.map.get(logNo);
-  if (!x) return b.expo.status === 'loading' ? '<span class="hint">확인 중…</span>' : '<span class="hint">-</span>';
-  const badge = `<span class="rk ${stCls(x)}">${ST[x.status]}</span>`;
-  return x.status === 'shown' ? badge : `${badge} <a class="verify" href="${naverBlogSearch(item.title)}" target="_blank" rel="noopener" title="네이버 블로그 탭에서 이 제목을 검색해 직접 확인">직접 확인</a>`;
-}
-const naverBlogSearch = (title) => 'https://search.naver.com/search.naver?ssc=tab.blog.all&query=' + encodeURIComponent(title);
-function renderExpo(el = document.getElementById('expo'), b = blogs[current]) {
-  if (!b || !el) return;
-  const idx = blogs.indexOf(b);
-  const e = b.expo;
-  if (!e) { el.innerHTML = b.role === 'me' ? '<p class="hint">확인을 준비하고 있어요.</p>'
-    : `<p class="hint" style="margin:0 0 12px">경쟁 블로그는 버튼을 눌렀을 때만 확인해요. 글 30개를 검색하므로 검색 API를 30회 씁니다.</p><button type="button" class="ghost expoBtn" data-expo="${idx}">제목 노출 확인하기</button>`; return; }
-  if (e.status !== 'ok' && e.status !== 'loading') { el.innerHTML = `<p class="hint">${esc(e.message || '확인하지 못했어요.')}</p>`; return; }
-  const s = expoSummary(e.data);
-  const loading = e.status === 'loading';
-  const total = e.total || e.data.results.length;
-  const status = loading
-    ? `<p class="hint" style="margin:10px 0 0">제목을 하나씩 검색하고 있어요. ${e.done}/${total}개 확인</p>`
-    : `<p class="hint" style="margin:10px 0 0">반영중 ${s.pending}개, 누락 ${s.missing}개${s.error ? `, 확인 실패 ${s.error}개` : ''}</p>
-       ${e.data.checkedAt ? `<p class="hint" style="margin:2px 0 0">${fmtDate(e.data.checkedAt)} 확인</p>` : ''}
-       ${s.error ? `<button class="ghost" type="button" data-retry="${idx}" style="margin-top:12px;font-size:13px;padding:7px 12px">실패한 ${s.error}개 다시 확인</button>` : ''}`;
-  el.innerHTML = `<div class="expo"><div>
-      <div class="big"><mark>${s.shown}</mark><small>/${total}</small></div>
-      <p style="margin:8px 0 0;font-weight:600">검색에 정상 노출된 글</p>${status}</div>
-    <div><div class="sq" role="img" aria-label="최근 글 ${total}개의 노출 상태: 정상 ${s.shown}, 반영중 ${s.pending}, 누락 ${s.missing}">${e.data.results.map((x) => `<span class="${stCls(x)}" title="${esc(x.title)}: ${ST[x.status]}"></span>`).join('')}${'<span></span>'.repeat(Math.max(0, total - e.data.results.length))}</div>
-    <div class="sq-axis"><span>최신 글</span><span>${total}번째 글</span></div>
-    <div class="lg"><span><i class="shown"></i>정상: 검색에 나옴</span><span><i class="pending"></i>반영중: 발행 1시간 이내, 아직 검색에 없음</span><span><i class="missing"></i>누락: 발행 1시간이 지났는데 검색에 없음</span></div>
-    <p class="hint" style="margin-top:12px;max-width:72ch">정상은 확실하지만, 반영중과 누락은 검색 API가 찾지 못했다는 뜻이에요. API가 실제 블로그 탭에 나오는 글을 빠뜨리기도 하니, 게시물 목록의 '직접 확인'으로 한 번 더 확인하세요.</p></div></div>`;
-}
 
+function rExpo() {
+  const rows = blogs.map((b, i) => {
+    const e = b.expo, total = Math.min(POST_LIMIT, b.stats.n || 0);
+    let cells = '', count = '';
+    if (!e) {
+      cells = Array.from({ length: total }, () => '<span></span>').join('');
+      count = b.role === 'me' ? '<span>준비 중</span>' : `<button type="button" class="btn" data-expo="${i}" title="글 30개를 검색하므로 검색 API를 30회 써요">노출 확인하기</button>`;
+    } else if (e.status !== 'ok' && e.status !== 'loading') {
+      cells = Array.from({ length: total }, () => '<span class="rerr"></span>').join('');
+      count = `<span>${esc(e.message || '확인하지 못했어요')}</span>`;
+    } else {
+      cells = e.data.results.map((x) => x.status === 'shown' ? `<span class="shown" title="${esc(x.title)}: 정상"></span>`
+        : `<a class="${stCls(x)}" href="${naverBlogSearch(x.title)}" target="_blank" rel="noopener" title="${esc(x.title)}: ${ST[x.status]} (눌러서 직접 확인)"></a>`).join('')
+        + Array.from({ length: Math.max(0, total - e.data.results.length) }, () => '<span class="loading"></span>').join('');
+      const s = expoSummary(e.data);
+      count = e.status === 'loading' ? `<span>확인 중 ${e.done}/${e.total}</span>`
+        : `<span class="ok"><b>${s.shown}</b>정상</span><span><b>${s.pending}</b>반영중</span><span class="ms"><b>${s.missing}</b>누락</span>${s.error ? `<button type="button" class="btn" data-retry="${i}">실패 ${s.error}개 다시</button>` : ''}`;
+    }
+    return `<div class="erow">${who(b)}<div class="strip" role="img" aria-label="${esc(nameOf(b))} 최근 글 ${total}개의 노출 상태">${cells}</div><div class="ecount">${count}</div></div>`;
+  });
+  $('expoRows').innerHTML = rows.join('');
+  // 맨 위 한 줄 결론: 내 블로그(없으면 첫 블로그)
+  const b = blogs.find((x) => x.role === 'me') || blogs[0], e = b && b.expo;
+  let v = '', sub = '';
+  if (!e) { v = '최근 글 30개의 제목 노출'; sub = '경쟁 블로그는 오른쪽 버튼을 눌렀을 때만 확인해요. 글마다 제목을 블로그 검색에 넣어 내 글이 나오는지 봅니다.'; }
+  else if (e.status === 'loading') { v = `최근 글 제목을 검색하고 있어요 (${e.done}/${e.total})`; sub = '글마다 제목을 블로그 검색에 넣어 그 글이 나오는지 확인해요.'; }
+  else if (e.status !== 'ok') { v = '제목 노출을 확인하지 못했어요'; sub = e.message || ''; }
+  else {
+    const s = expoSummary(e.data), t = e.total || s.n;
+    v = s.shown === t ? `최근 글 ${t}건 모두 <span class="n">검색에 나오고 있어요</span>`
+      : `최근 글 ${t}건 중 <span class="n">${s.shown}건</span>이 검색에 나와요${s.missing ? `, <span class="m">${s.missing}건 누락</span>` : ''}`;
+    sub = `${blogs.length > 1 ? esc(nameOf(b)) + ' 기준, ' : ''}${e.data.checkedAt ? fmtDate(e.data.checkedAt) + ' 확인' : ''}`;
+  }
+  $('verdict').innerHTML = v; $('verdictSub').innerHTML = sub;
+}
 document.addEventListener('click', (ev) => {
-  const rb = ev.target && ev.target.closest && ev.target.closest('[data-retry]');
-  if (rb) { const b = blogs[+rb.dataset.retry]; if (b) loadExposure(b, true); }
-  const eb = ev.target && ev.target.closest && ev.target.closest('[data-expo]');
-  if (eb) { const b = blogs[+eb.dataset.expo]; if (b) loadExposure(b); }
+  const t = ev.target.closest && ev.target.closest('[data-retry],[data-expo]');
+  if (!t) return;
+  const b = blogs[+(t.dataset.retry ?? t.dataset.expo)];
+  if (b) loadExposure(b, t.dataset.retry !== undefined);
 });
 
-function diagnose(s) {
-  if (!s.n) return [];
-  const g = (v, good, mid, hi = true) => hi ? (v >= good ? 'good' : v >= mid ? 'mid' : 'bad') : (v <= good ? 'good' : v <= mid ? 'mid' : 'bad');
-  const zr = s.weeks.length ? s.zeroWeeks / s.weeks.length : 0;
-  const top1 = topN(s.cats, 1)[0];
-  return [
-    ['발행량', g(s.perWeek, 3, 1), `주 평균 ${s.perWeek}회`, '주 3회 이상이면 좋음, 1회 이상이면 보통'],
-    ['꾸준함', g(zr, 0.1, 0.3, false), `글 없는 주 ${s.zeroWeeks}/${s.weeks.length}주 (${Math.round(zr * 100)}%)`, '빈 주가 10% 이하면 좋음, 30% 이하면 보통'],
-    ['최근 활동', g(s.daysSinceLast, 7, 14, false), `마지막 글 ${Math.round(s.daysSinceLast)}일 전`, '7일 이내면 좋음, 14일 이내면 보통'],
-    ['태그 활용', g(s.avgTags, 5, 2), `글당 평균 ${s.avgTags}개, 태그 없는 글 ${s.noTag}개`, '평균 5개 이상이면 좋음, 2개 이상이면 보통'],
-    ['주제 집중도', 'info', `최다 카테고리 '${top1[0]}' ${Math.round(top1[1] / s.n * 100)}%`, `카테고리 ${s.cats.size}개 사용 (좋고 나쁨 판단 안 함)`],
-  ];
+// ---- 블로그 카드 ----
+const mateLabel = (pr) => pr && pr.naverMate ? `네이버 메이트${pr.mate && pr.mate.topic ? ' ' + pr.mate.topic : ''}` : '';
+const inflSearch = (b) => { const pr = profile(b); const q = (pr && pr.nickName) || nameOf(b); return 'https://search.naver.com/search.naver?query=' + encodeURIComponent(q + ' 인플루언서'); };
+function rBlogs() {
+  const el = $('sBlogs');
+  el.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(0, 1fr))`;
+  if (matchMedia('(max-width: 860px)').matches) el.style.gridTemplateColumns = '1fr';
+  el.innerHTML = blogs.map((b) => {
+    const pr = profile(b), d = b.data;
+    const tags = [];
+    if (profLoading(b)) tags.push('<span class="tag">정보 불러오는 중</span>');
+    else if (pr) {
+      if (pr.topic) tags.push(`<span class="tag">${esc(pr.topic)}</span>`);
+      if (pr.officialBlog) tags.push('<span class="tag yes">공식 블로그</span>');
+      if (pr.powerBlog) tags.push('<span class="tag yes">파워블로그</span>');
+      if (pr.naverMate) tags.push(`<span class="tag yes">${esc(mateLabel(pr))}</span>`);
+      tags.push(pr.influencerHome ? `<a class="tag yes" href="${esc(pr.influencerHome)}" target="_blank" rel="noopener">인플루언서</a>`
+        : `<a class="tag" href="${inflSearch(b)}" target="_blank" rel="noopener" title="자동으로 확인되지 않았어요. 눌러서 직접 확인">인플루언서 직접 확인</a>`);
+    }
+    return `<article class="bcard" style="${cv(b)}">
+      <div class="av" style="${d.channel.image ? `background-image:url('${esc(d.channel.image)}')` : ''}"></div>
+      <div style="min-width:0"><div class="role">${ROLE[b.role] || ''}</div><a class="nm" href="${esc(blogLink(b))}" target="_blank" rel="noopener">${esc(nameOf(b))}</a></div>
+      <div class="id">${esc(pr && pr.nickName ? pr.nickName + ', ' : '')}blog.naver.com/${esc(d.blogId)}</div>
+      <div class="tags">${tags.join('')}</div>
+      <div class="watch">${watchControl(b)}</div></article>`;
+  }).join('');
 }
 
-function insights(s) {
-  const out = [];
-  if (!s.n) return ['RSS에 공개 글이 없습니다.'];
-  out.push(`최근 ${s.n}개 글이 약 ${Math.round(s.spanDays)}일에 걸쳐 발행됐어요. 주 평균 <b>${s.perWeek}회</b>, 발행 간격 중앙값은 <b>${s.medGap}일</b>입니다.`);
-  if (s.n >= POST_LIMIT) out.push(`최근 글 ${POST_LIMIT}개 기준이에요. 이보다 오래된 글은 분석에 넣지 않았어요.`);
-  if (s.zeroWeeks > 0) out.push(`분석 기간 ${s.weeks.length}주 중 <b>${s.zeroWeeks}주</b>는 글이 없었습니다. 가장 긴 공백은 ${s.maxGap}일이에요.`);
-  else out.push(`분석 기간 ${s.weeks.length}주 동안 매주 최소 1개 이상 발행했어요.`);
-  if (s.daysSinceLast > 14) out.push(`마지막 글이 <b>${Math.round(s.daysSinceLast)}일 전</b>입니다. 발행이 멈춘 상태일 수 있어요.`);
-  out.push(`가장 많이 올린 요일은 <b>${s.topDays.map((d) => DAYS[d] + '요일').join('·')}</b>(${s.topDays.length > 1 ? '각 ' : ''}${s.topDayCnt}개), 시간대는 <b>${s.topHours.map((h) => h + '시대').join('·')}</b>(${s.topHours.length > 1 ? '각 ' : ''}${s.topHourCnt}개)입니다.`);
-  const [c1] = topN(s.cats, 1);
-  if (c1) out.push(`<b>${esc(c1[0])}</b> 카테고리가 ${Math.round(c1[1] / s.n * 100)}%로 가장 많아요. 카테고리는 총 ${s.cats.size}개가 쓰였습니다.`);
-  out.push(`글당 태그는 평균 ${s.avgTags}개${s.noTag ? `, 태그 없는 글이 <b>${s.noTag}개</b>` : ''}입니다. 제목 평균 길이는 ${s.avgTitle}자예요.`);
-  return out;
+// ---- 핵심 지표 ----
+const popOf = (b) => (b.prof && b.prof.status === 'ok' ? (b.prof.data.popular || []) : null);
+function popSum(b) { const p = popOf(b); if (!p) return null; const v = p.map((x) => x.views).filter((x) => x != null); return v.length ? v.reduce((a, c) => a + c, 0) : null; }
+function reactStats(b) {
+  if (!b.prof || b.prof.status !== 'ok') return null;
+  const rs = (b.stats.items || []).map((it) => reactOf(b, it)).filter(Boolean);
+  if (!rs.length) return { n: 0 };
+  const avg = (k) => { const v = rs.map((x) => x[k]).filter((x) => x != null); return v.length ? r1(v.reduce((a, c) => a + c, 0) / v.length) : null; };
+  return { n: rs.length, likes: avg('likes'), comments: avg('comments') };
 }
-
-function clearCharts() { charts.forEach((c) => c.destroy()); charts = []; }
-
-function render() {
-  const { data, stats: s } = blogs[current];
-  document.getElementById('result').classList.remove('hidden');
-  document.getElementById('cmpView').classList.add('hidden');
-  renderMast(document.getElementById('mast'), blogs[current]);
-  renderKpis(blogs[current]);
-  loadProfile(blogs[current]);
-  renderVisit(blogs[current]); loadVisitors(blogs[current]); renderPop(blogs[current]); loadWatch(blogs[current]);
-  document.getElementById('insights').innerHTML = insights(s).map((t) => `<li>${t}</li>`).join('');
-  renderExpo(); if (blogs[current].role === 'me') loadExposure(blogs[current]);
-  const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
-  document.getElementById('diag').innerHTML = diagnose(s).map(([t, lv, v, c]) =>
-    `<div><div class="t">${t}<span class="pill ${lv === 'info' ? 'mid' : lv}">${L[lv]}</span></div><div class="d">${esc(v)}<br>${c}</div></div>`).join('');
-  document.getElementById('meta').textContent = s.n
-    ? `${fmtDate(s.oldest).slice(0, 10)}부터 ${fmtDate(s.newest).slice(0, 10)}까지 쓴 최근 글 ${s.n}개를 ${fmtDate(data.fetchedAt)}에 분석했어요.` : '';
-
-  clearCharts();
-  if (!s.n) return;
-  const css = getComputedStyle(document.documentElement);
-  const accent = css.getPropertyValue('--accent').trim(), muted = css.getPropertyValue('--muted').trim(), line = css.getPropertyValue('--line').trim();
-  Chart.defaults.color = muted; Chart.defaults.borderColor = line;
-  document.getElementById('weekCard').classList.toggle('hidden', s.weeks.length < MIN_WEEKS);
-  if (s.weeks.length >= MIN_WEEKS) charts.push(new Chart(document.getElementById('cWeek'), {
-    type: 'bar', data: { labels: s.weeks.map((w) => w[0]), datasets: [{ data: s.weeks.map((w) => w[1]), backgroundColor: accent, borderRadius: 4 }] },
-    options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } },
-  }));
-  const cats = topN(s.cats, 10);
-  charts.push(new Chart(document.getElementById('cCat'), {
-    type: 'bar', data: { labels: cats.map((c) => c[0]), datasets: [{ data: cats.map((c) => c[1]), backgroundColor: accent, borderRadius: 4 }] },
-    options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } }, y: { grid: { display: false } } } },
-  }));
-
-  const max = Math.max(1, ...s.heat.flat());
-  let h = '<div class="lbl"></div>' + Array.from({ length: 24 }, (_, i) => `<div class="lbl">${i % 3 === 0 ? i : ''}</div>`).join('');
-  [1, 2, 3, 4, 5, 6, 0].forEach((d) => {
-    h += `<div class="lbl">${DAYS[d]}</div>` + s.heat[d].map((v, hr) => `<div title="${DAYS[d]} ${hr}시: ${v}개" style="background:${v ? `color-mix(in srgb, ${accent} ${20 + 80 * v / max}%, transparent)` : 'var(--bg)'};color:${v / max > .5 ? '#fff' : 'inherit'}">${v || ''}</div>`).join('');
+const PV = (k) => (b) => { const pr = profile(b); return pr ? pr[k] : null; };
+const METRICS = [
+  { g: '규모' },
+  { label: '이웃', unit: '명', get: PV('neighbors'), dir: 'hi', prof: true },
+  { label: '누적 방문자', unit: '명', get: PV('totalVisitors'), dir: 'hi', prof: true },
+  { label: '오늘 방문자', sub: '자정부터 지금까지', unit: '명', get: PV('todayVisitors'), dir: 'hi', prof: true },
+  { g: '반응' },
+  { label: '지난주 인기글 조회 합', sub: '인기글 10개', unit: '회', get: popSum, dir: 'hi', prof: true },
+  { label: '인기글 1위 조회', unit: '회', get: (b) => { const p = popOf(b); return p && p[0] ? p[0].views : null; }, dir: 'hi', prof: true },
+  { label: '글당 공감', unit: '개', get: (b) => (reactStats(b) || {}).likes ?? null, dir: 'hi', prof: true },
+  { label: '글당 댓글', unit: '개', get: (b) => (reactStats(b) || {}).comments ?? null, dir: 'hi', prof: true },
+  { label: 'AI 브리핑 인용', sub: '이번 달', unit: '회', get: (b) => { const pr = profile(b); return pr && pr.citations ? pr.citations.thisMonth : null; }, dir: 'hi', prof: true,
+    note: (b) => { const pr = profile(b); return pr && pr.citations && pr.citations.cumulative != null ? `누적 ${fmtN(pr.citations.cumulative)}회` : ''; } },
+  { g: '발행' },
+  { label: '주 평균 발행', unit: '회', get: (b) => b.stats.perWeek ?? null, dir: 'hi' },
+  { label: '보통 발행 간격', sub: '중앙값', get: (b) => b.stats.medGapRaw ?? null, fmt: gapText, dir: 'lo' },
+  { label: '마지막 발행', get: (b) => b.stats.n ? b.stats.daysSinceLast : null, fmt: agoText, dir: 'lo' },
+  { label: '글당 태그', unit: '개', get: (b) => b.stats.avgTags ?? null, dir: 'hi' },
+];
+function rScore() {
+  const el = $('score');
+  const val = (m, b) => (m.prof && profLoading(b) ? '…' : m.get(b));
+  const show = (m, v) => v === '…' ? '…' : v == null ? '-' : m.fmt ? m.fmt(v) : fmtN(v);
+  if (blogs.length === 1) {
+    const b = blogs[0];
+    $('scoreSub').textContent = '이웃·방문자·공감은 네이버 모바일 화면의 값이에요.';
+    el.innerHTML = '<div class="tiles">' + METRICS.filter((m) => !m.g).map((m) => {
+      const v = val(m, b), note = m.note ? m.note(b) : m.sub || '';
+      return `<div class="tile"><div class="v">${show(m, v)}${m.unit && typeof v === 'number' ? `<small>${m.unit}</small>` : ''}</div><div class="l">${m.label}</div>${note ? `<div class="sub">${esc(note)}</div>` : ''}</div>`;
+    }).join('') + '</div>';
+    return;
+  }
+  $('scoreSub').textContent = '막대 길이는 같은 줄에서 가장 큰 값 기준이에요. 굵은 숫자가 그 줄에서 앞선 블로그예요.';
+  const n = blogs.length;
+  let h = `<div class="score" style="--n:${n}"><div class="srow head"><span class="slabel"></span>${blogs.map((b) => who(b)).join('')}</div>`;
+  METRICS.forEach((m) => {
+    if (m.g) { h += `<div class="srow grp">${m.g}</div>`; return; }
+    const vs = blogs.map((b) => val(m, b));
+    const nums = vs.filter((v) => typeof v === 'number');
+    const lead = nums.length > 1 && new Set(nums).size > 1 ? (m.dir === 'lo' ? Math.min(...nums) : Math.max(...nums)) : null;
+    const max = Math.max(0, ...nums);
+    h += `<div class="srow"><span class="slabel">${m.label}${m.sub ? `<small>${m.sub}</small>` : ''}</span>${blogs.map((b, i) => {
+      const v = vs[i], note = m.note ? m.note(b) : '';
+      const bar = m.dir === 'hi' ? `<div class="bar"><i style="width:${typeof v === 'number' && max ? Math.max(1.5, v / max * 100) : 0}%"></i></div>` : '';
+      return `<div class="cell${v === lead ? ' lead' : ''}" style="${cv(b)}"><div class="v">${show(m, v)}${m.unit && typeof v === 'number' ? m.unit : ''}</div>${bar}${note ? `<div class="sub">${esc(note)}</div>` : ''}</div>`;
+    }).join('')}</div>`;
   });
-  document.getElementById('heat').innerHTML = h;
-
-  const chips = (arr) => arr.length ? arr.map(([w, c]) => `<span class="chip">${esc(w)}<b>${c}</b></span>`).join('') : '<span class="hint">데이터 없음</span>';
-  document.getElementById('tags').innerHTML = chips(topN(s.tags, 20));
-  document.getElementById('words').innerHTML = chips(topN(s.words, 20));
-  renderPosts();
+  el.innerHTML = h + '</div>';
 }
 
-function renderPosts() {
-  const s = blogs[current].stats;
-  const q = document.getElementById('filter').value.trim().toLowerCase();
-  const rows = (s.items || []).filter((i) => !q || (i.title + ' ' + i.tags.join(' ') + ' ' + i.category).toLowerCase().includes(q));
-  const b = blogs[current];
-  document.getElementById('posts').innerHTML = `<thead><tr><th>발행일</th><th>노출</th><th>제목</th><th>카테고리</th><th class="num">조회</th><th class="num">공감</th><th class="num">댓글</th></tr></thead><tbody>` +
-    rows.map((i) => `<tr><td style="white-space:nowrap">${fmtDate(i.pubDate)}</td><td>${expoRankCell(b, i)}</td><td><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a></td><td>${esc(i.category)}</td><td class="num" title="${popViews(b, logNoOfItem(i)) == null ? '인기글이 아니면 조회수가 공개되지 않아요' : ''}">${fmtN(popViews(b, logNoOfItem(i)))}</td><td class="num">${fmtN((reactOf(b, i) || {}).likes)}</td><td class="num">${fmtN((reactOf(b, i) || {}).comments)}</td></tr>`).join('') + '</tbody>';
+// ---- 지난주 인기글 ----
+function rPop() {
+  const el = $('pop');
+  el.style.setProperty('--n', blogs.length);
+  const gmax = Math.max(1, ...blogs.flatMap((b) => (popOf(b) || []).map((x) => x.views || 0)));
+  const li = (b, x, i) => `<li><span class="rk">${i + 1}</span><span class="th"${x.thumbnail ? ` style="background-image:url('${esc(x.thumbnail)}')"` : ''}></span>
+    <div style="min-width:0"><a class="tt" href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener" title="${esc(x.title)}">${esc(x.title)}</a>
+    <div class="vb"><i style="width:${Math.max(2, (x.views || 0) / gmax * 70)}%"></i><span>${fmtN(x.views)}</span></div></div></li>`;
+  el.innerHTML = blogs.map((b) => {
+    const head = (r) => `<div class="colh" style="${cv(b)}"><span class="dot"></span>${esc(nameOf(b))}${r ? `<span class="r">${r}</span>` : ''}</div>`;
+    if (profLoading(b)) return `<div style="${cv(b)}">${head()}<p class="empty">불러오고 있어요.</p></div>`;
+    const p = popOf(b);
+    if (!p || !p.length) return `<div style="${cv(b)}">${head()}<p class="empty">인기글을 가져오지 못했어요. 인기글을 공개하지 않은 블로그일 수 있어요.</p></div>`;
+    return `<div style="${cv(b)}">${head(`합 <b>${fmtN(popSum(b))}</b>회`)}<ol class="plist">${p.slice(0, 5).map((x, i) => li(b, x, i)).join('')}</ol>
+      ${p.length > 5 ? `<details class="fold"><summary>6~${p.length}위 보기</summary><ol class="plist">${p.slice(5).map((x, i) => li(b, x, i + 5)).join('')}</ol></details>` : ''}</div>`;
+  }).join('');
 }
 
-const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-const colorOf = (i) => { const r = blogs[i] && blogs[i].role; return css(r ? '--' + r : '--s' + (i % 5 + 1)); };
-const nameOf = (b) => b.data.channel.title || b.data.blogId;
-const ROLE = { me: '내 블로그', c1: '경쟁 1', c2: '경쟁 2' };
-const rc = (b) => (b && b.role ? ' rc-' + b.role : '');
-const roleTag = (b) => b.role ? `<span class="role ${b.role}">${ROLE[b.role]}</span>` : '';
-const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
-const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
+// ---- 방문자 ----
+async function loadVisitors(b) {
+  if (b.vis) return;
+  b.vis = { status: 'loading' };
+  try { const r = await fetch('/api/visitors?id=' + encodeURIComponent(b.data.blogId)); const body = await r.json(); b.vis = r.ok ? { status: 'ok', data: body } : { status: 'error' }; }
+  catch (_) { b.vis = { status: 'error' }; }
+  if (blogs.includes(b)) rVisit();
+}
+function visitDays(b) {
+  if (!b.vis || b.vis.status !== 'ok') return [];
+  const days = b.vis.data.days.map((d) => ({ ...d }));
+  const pr = profile(b);
+  const today = new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10);
+  const t = days.find((d) => d.date === today);
+  if (pr && pr.todayVisitors != null) { if (t) { t.count = pr.todayVisitors; t.partial = true; } else days.push({ date: today, count: pr.todayVisitors, partial: true }); }
+  return days.sort((x, y) => x.date.localeCompare(y.date)).slice(-30);
+}
+function rVisit() {
+  const el = $('visit');
+  if (blogs.some((b) => !b.vis || b.vis.status === 'loading')) { el.innerHTML = '<p class="empty">방문자 수를 불러오고 있어요.</p>'; $('visitLegend').innerHTML = ''; chart('visit'); return; }
+  const per = blogs.map((b) => ({ b, days: visitDays(b) }));
+  const withData = per.filter((x) => x.days.length >= 2);
+  const missing = per.filter((x) => x.days.length < 2);
+  const storage = blogs.some((b) => b.vis.data && b.vis.data.storage);
+  const why = missing.length ? `<p class="note">${missing.map((x) => esc(nameOf(x.b))).join(', ')}: 방문자 위젯이 비공개라 네이버가 날짜별 값을 주지 않아요. ${storage ? '매일 누적 방문자 수를 기록해서, 기록이 쌓이는 다음 날부터 그래프에 나타나요.' : ''}</p>` : '';
+  $('visitLegend').innerHTML = withData.length > 1 ? withData.map((x) => `<span style="${cv(x.b)}"><span class="dot" style="margin-right:6px"></span>${esc(nameOf(x.b))}</span>`).join('') : '';
+  if (!withData.length) { el.innerHTML = why || '<p class="empty">날짜별 방문자 값이 아직 없어요.</p>'; chart('visit'); return; }
+  let stat = '';
+  if (withData.length === 1) {
+    const full = withData[0].days.filter((d) => !d.partial);
+    if (full.length) {
+      const max = full.reduce((a, d) => (d.count > a.count ? d : a)), avg = Math.round(full.reduce((a, d) => a + d.count, 0) / full.length);
+      stat = `<p class="small" style="margin:0 0 10px">${esc(nameOf(withData[0].b))}: 하루 평균 <b style="color:var(--ink)">${fmtN(avg)}명</b>, 최고 ${fmtN(max.count)}명 (${max.date.slice(5).replace('-', '.')}). 점선은 오늘 집계 중인 값이에요.</p>`;
+    }
+  }
+  const box = `${stat}<div class="chart"><canvas id="cVisit" aria-label="날짜별 방문자 수 선 차트"></canvas></div>`;
+  // 비교 중인데 날짜별 값이 한 블로그뿐이면 비교가 안 되므로 접어 둔다
+  const fold = blogs.length > 1 && withData.length === 1;
+  el.innerHTML = (fold ? `<details class="fold" id="visitFold"><summary>${esc(nameOf(withData[0].b))}만 날짜별 값이 있어요. 펼쳐 보기</summary>${box}</details>` : box) + why;
+  const draw = () => {
+    chartBase();
+    const dates = [...new Set(withData.flatMap((x) => x.days.map((d) => d.date)))].sort();
+    chart('visit', $('cVisit'), {
+      type: 'line',
+      data: { labels: dates.map((d) => d.slice(5).replace('-', '.')), datasets: withData.map((x) => {
+        const m = new Map(x.days.map((d) => [d.date, d])), c = colorOf(x.b);
+        return { label: nameOf(x.b), data: dates.map((d) => (m.has(d) ? m.get(d).count : null)), borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0.25, spanGaps: false,
+          pointRadius: dates.map((d) => (m.get(d) && m.get(d).partial ? 4 : 2)), pointBackgroundColor: dates.map((d) => (m.get(d) && m.get(d).partial ? cssv('--surface') : c)),
+          segment: { borderDash: (ctx) => { const d = m.get(dates[ctx.p1DataIndex]); return d && d.partial ? [4, 4] : undefined; } } };
+      }) },
+      options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${fmtN(x.raw)}명` } } },
+        scales: { y: { beginAtZero: true, ticks: { callback: (v) => fmtN(v) } }, x: { grid: { display: false } } } },
+    });
+  };
+  if (fold) { const f = $('visitFold'); f.addEventListener('toggle', () => { if (f.open) draw(); }); chart('visit'); } else draw();
+}
+
+// ---- 발행 패턴 ----
+function rPattern() {
+  chartBase();
+  const live = blogs.filter((b) => b.stats.n);
+  const pct = (arr, n) => arr.map((v) => (n ? r1(v / n * 100) : 0));
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  const tip = { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw}%` } };
+  chart('day', $('cDay'), {
+    type: 'bar',
+    data: { labels: order.map((d) => DAYS[d]), datasets: live.map((b) => ({ label: nameOf(b), backgroundColor: colorOf(b), borderRadius: 3, maxBarThickness: 22,
+      data: pct(order.map((d) => b.stats.heat[d].reduce((a, c) => a + c, 0)), b.stats.n) })) },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + '%', maxTicksLimit: 5 } }, x: { grid: { display: false } } } },
+  });
+  // 시간대는 3시간 단위로 묶어 선이 덜 출렁이게
+  const slots = Array.from({ length: 8 }, (_, i) => i * 3);
+  chart('hour', $('cHour'), {
+    type: 'bar',
+    data: { labels: slots.map((h) => `${h}~${h + 3}시`), datasets: live.map((b) => ({ label: nameOf(b), backgroundColor: colorOf(b), borderRadius: 3, maxBarThickness: 22,
+      data: pct(slots.map((h) => b.stats.heat.reduce((a, r) => a + r[h] + r[h + 1] + r[h + 2], 0)), b.stats.n) })) },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tip },
+      scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + '%', maxTicksLimit: 5 } }, x: { grid: { display: false }, ticks: { maxRotation: 0, font: { size: 11 } } } } },
+  });
+  // 주차별: 모든 블로그의 데이터가 있는 기간이 4주 이상일 때만
+  const panel = $('weekPanel');
+  if (!live.length) { panel.classList.add('hidden'); return; }
+  const first = new Date(Math.max(...live.map((b) => weekStart(b.stats.oldest).getTime())));
+  const last = new Date(Math.max(...live.map((b) => weekStart(b.stats.newest).getTime())));
+  const keys = []; for (let w = first; w <= last; w = new Date(w.getTime() + 7 * 864e5)) keys.push(w.toISOString().slice(0, 10));
+  panel.classList.toggle('hidden', keys.length < MIN_WEEKS);
+  if (keys.length < MIN_WEEKS) { chart('week'); return; }
+  $('weekSub').textContent = live.length > 1 ? `모든 블로그의 글이 있는 ${keys.length}주만 비교해요.` : `최근 글 30개가 덮는 ${keys.length}주`;
+  chart('week', $('cWeek'), {
+    type: live.length > 1 ? 'line' : 'bar',
+    data: { labels: keys.map((k) => k.slice(5).replace('-', '.')), datasets: live.map((b) => {
+      const m = countBy(b.stats.items.map((it) => weekStart(it.pubDate).toISOString().slice(0, 10)));
+      const lo = weekStart(b.stats.oldest).getTime();
+      return { label: nameOf(b), borderColor: colorOf(b), backgroundColor: colorOf(b), borderWidth: 2, pointRadius: 2, tension: 0.25, borderRadius: 3, maxBarThickness: 26,
+        data: keys.map((k) => (new Date(k).getTime() < lo ? null : (m.get(k) || 0))) };
+    }) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0, maxTicksLimit: 5 } }, x: { grid: { display: false } } } },
+  });
+}
+
+// ---- 카테고리와 태그 ----
+function rTags() {
+  const el = $('cats');
+  el.style.setProperty('--n', blogs.length);
+  const owners = new Map();
+  blogs.forEach((b) => b.stats.n && b.stats.tags.forEach((_, t) => owners.set(t, (owners.get(t) || 0) + 1)));
+  const shared = blogs.length > 1 && [...owners.values()].some((v) => v > 1);
+  $('tagSub').textContent = shared ? '최근 글 30개 기준. 테두리가 있는 태그는 다른 블로그도 쓴 태그예요.' : '최근 글 30개 기준';
+  el.innerHTML = blogs.map((b) => {
+    const s = b.stats;
+    const head = `<div class="colh" style="${cv(b)}"><span class="dot"></span>${esc(nameOf(b))}</div>`;
+    if (!s.n) return `<div>${head}<p class="empty">공개 글이 없어요.</p></div>`;
+    const cats = topN(s.cats, 5).map(([c, v]) => { const p = Math.round(v / s.n * 100);
+      return `<div class="catbar" style="${cv(b)}"><div class="tr"><i style="width:${p}%"></i><span>${esc(c)}</span></div><span class="p">${p}%</span></div>`; }).join('');
+    const tags = topN(s.tags, 12).map(([t, v]) => `<span class="chip${owners.get(t) > 1 && blogs.length > 1 ? ' shared' : ''}">${esc(t)}<b>${v}</b></span>`).join('') || '<span class="small">태그 없음</span>';
+    return `<div>${head}${cats}<div class="sub2">자주 쓴 태그${s.noTag ? ` (태그 없는 글 ${s.noTag}개)` : ''}</div><div class="chips">${tags}</div></div>`;
+  }).join('');
+}
+
+// ---- 게시물 ----
+let postBlog = -1, postLimit = 20;
+function stCell(b, it) {
+  if (!b.expo || !b.expo.map) return b.role === 'me' ? '<span class="st">확인 중</span>' : '<span class="small">-</span>';
+  const x = b.expo.map.get(logNoOfItem(it));
+  if (!x) return b.expo.status === 'loading' ? '<span class="st">확인 중</span>' : '<span class="small">-</span>';
+  return `<span class="st ${stCls(x)}">${ST[x.status]}${x.status !== 'shown' ? ` <a href="${naverBlogSearch(it.title)}" target="_blank" rel="noopener">직접 확인</a>` : ''}</span>`;
+}
+const popViews = (b, logNo) => { const p = popOf(b); const x = p && p.find((q) => q.logNo === logNo); return x ? x.views : null; };
+function postRows() {
+  const q = $('filter').value.trim().toLowerCase();
+  return blogs.flatMap((b, bi) => (postBlog >= 0 && postBlog !== bi ? [] : (b.stats.items || []).map((it) => ({ it, b }))))
+    .filter(({ it }) => !q || (it.title + ' ' + it.tags.join(' ') + ' ' + it.category).toLowerCase().includes(q))
+    .sort((x, y) => new Date(y.it.pubDate) - new Date(x.it.pubDate));
+}
+function rPosts() {
+  const seg = $('postSeg');
+  seg.classList.toggle('hidden', blogs.length < 2);
+  seg.innerHTML = [['전체', -1], ...blogs.map((b, i) => [nameOf(b), i])].map(([l, i]) =>
+    `<button type="button" data-pb="${i}" aria-pressed="${postBlog === i}"${i >= 0 ? ` style="${cv(blogs[i])}"` : ''}>${i >= 0 ? '<span class="dot"></span>' : ''}${esc(l.length > 10 ? l.slice(0, 10) + '…' : l)}</button>`).join('');
+  const rows = postRows(), multi = blogs.length > 1;
+  $('posts').innerHTML = `<thead><tr>${multi ? '<th></th>' : ''}<th>발행</th><th>제목</th><th>노출</th><th class="num">조회</th><th class="num">공감</th><th class="num">댓글</th></tr></thead><tbody>` +
+    rows.slice(0, postLimit).map(({ it, b }) => { const r = reactOf(b, it) || {}, v = popViews(b, logNoOfItem(it));
+      return `<tr>${multi ? `<td class="dotc" style="${cv(b)};width:14px;padding-right:0" title="${esc(nameOf(b))}"><span class="dot" style="margin-top:6px"></span></td>` : ''}<td class="d" style="${cv(b)}">${multi ? '<span class="dot" style="margin-right:6px"></span>' : ''}${shortDate(it.pubDate)}</td>
+      <td class="t"><a href="${esc(it.link)}" target="_blank" rel="noopener">${esc(it.title)}</a><span class="c">${esc(it.category)}</span></td>
+      <td>${stCell(b, it)}</td><td class="num" data-l="조회" ${v == null ? 'title="인기글이 아니면 조회수가 공개되지 않아요"' : ''}>${fmtN(v)}</td><td class="num" data-l="공감">${fmtN(r.likes)}</td><td class="num" data-l="댓글">${fmtN(r.comments)}</td></tr>`; }).join('') + '</tbody>';
+  const mb = $('more'); mb.hidden = rows.length <= postLimit; mb.textContent = `더 보기 (${rows.length - Math.min(postLimit, rows.length)}개 남음)`;
+}
+document.addEventListener('click', (ev) => { const t = ev.target.closest && ev.target.closest('[data-pb]'); if (t) { postBlog = +t.dataset.pb; postLimit = 20; rPosts(); } });
+$('filter').oninput = () => { postLimit = 20; rPosts(); };
+$('more').onclick = () => { postLimit += 30; rPosts(); };
+function downloadCsv(filename, rows) {
+  const q = (v) => '"' + String(v).replace(/"/g, '""') + '"';
+  const blob = new Blob(['﻿' + rows.map((r) => r.map(q).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+}
+$('csv').onclick = () => {
+  const st = (b, it) => { const x = b.expo && b.expo.map && b.expo.map.get(logNoOfItem(it)); return x ? ST[x.status] : ''; };
+  downloadCsv(`blog_${blogs.map((b) => b.data.blogId).join('_')}.csv`, [['블로그', '발행일(KST)', '제목', '카테고리', '태그', '노출', '조회', '공감', '댓글', 'URL'],
+    ...postRows().map(({ it, b }) => { const r = reactOf(b, it) || {}; return [nameOf(b), fmtDate(it.pubDate), it.title, it.category, it.tags.join(' '), st(b, it), popViews(b, logNoOfItem(it)) ?? '', r.likes ?? '', r.comments ?? '', it.link]; })]);
+};
+
+// ---- 프로필 (비공식) ----
+async function loadProfile(b) {
+  if (b.prof) return;
+  b.prof = { status: 'loading' };
+  try {
+    const r = await fetch('/api/profile?id=' + encodeURIComponent(b.data.blogId));
+    const body = await r.json();
+    b.prof = r.ok ? { status: 'ok', data: body, map: new Map((body.posts || []).map((x) => [x.logNo, x])) } : { status: 'error' };
+  } catch (_) { b.prof = { status: 'error' }; }
+  if (!blogs.includes(b)) return;
+  rBlogs(); rScore(); rPop(); rPosts(); if (!blogs.some((x) => !x.vis || x.vis.status === 'loading')) rVisit();
+}
+
+function renderReport() {
+  $('report').classList.remove('hidden');
+  $('intro').classList.add('hidden');
+  postBlog = -1; postLimit = 20; $('filter').value = '';
+  rBlogs(); rExpo(); rScore(); rVisit(); rPop(); rPattern(); rTags(); rPosts();
+  $('foot').innerHTML = blogs.map((b) => b.stats.n ? `${esc(nameOf(b))}: ${fmtDate(b.stats.oldest).slice(0, 10)}부터 ${fmtDate(b.stats.newest).slice(0, 10)}까지 쓴 최근 글 ${b.stats.n}개` : `${esc(nameOf(b))}: 공개 글 없음`).join('<br>')
+    + `<br>${fmtDate(blogs[0].data.fetchedAt)}에 분석했어요. 이웃·방문자·공감·조회수·인증 정보는 네이버 모바일 화면의 비공식 값이에요.`;
+  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); loadWatch(b); });
+}
 
 // ---- 로그인 (Supabase Auth) ----
 let sbc = null, session = null, myInfo = null;
@@ -698,17 +791,16 @@ async function initAuth() {
     const cfg = await (await fetch('/api/config')).json();
     if (!cfg.authEnabled || !window.supabase) { renderAccount(); return; }
     sbc = window.supabase.createClient(cfg.supabaseUrl, cfg.publishableKey, { auth: { persistSession: true, detectSessionInUrl: true } });
-    // Supabase에서 켜 둔 간편 로그인만 버튼으로 보여준다
     try {
       const st = await (await fetch(cfg.supabaseUrl + '/auth/v1/settings', { headers: { apikey: cfg.publishableKey } })).json();
       const ext = st.external || {}, btn = [];
       if (cfg.naverLogin) btn.push('<button type="button" class="naver" data-naver="1"><b>N</b> 네이버로 시작하기</button>');
       if (ext.google) btn.push('<button type="button" class="google" data-oauth="google">Google로 시작하기</button>');
-      document.getElementById('socialBtns').innerHTML = btn.join('') || '';
-      if (!btn.length) document.getElementById('loginMsg').textContent = '로그인 방법을 준비하고 있어요.';
+      $('socialBtns').innerHTML = btn.join('');
+      if (!btn.length) $('loginMsg').textContent = '로그인 방법을 준비하고 있어요.';
     } catch (_) {}
     const h = new URLSearchParams(location.hash.slice(1));
-    if (h.get('login_error')) { document.getElementById('loginBox').classList.remove('hidden'); document.getElementById('loginMsg').textContent = h.get('login_error'); history.replaceState(null, '', location.pathname + location.search); }
+    if (h.get('login_error')) { $('loginBox').classList.remove('hidden'); $('loginMsg').textContent = h.get('login_error'); history.replaceState(null, '', location.pathname + location.search); }
     session = (await sbc.auth.getSession()).data.session;
     if (!session && h.get('access_token') && h.get('refresh_token')) { session = (await sbc.auth.setSession({ access_token: h.get('access_token'), refresh_token: h.get('refresh_token') })).data.session; }
     if (h.get('access_token')) history.replaceState(null, '', location.pathname + location.search);
@@ -720,35 +812,33 @@ async function onLoginChanged() {
   myInfo = null;
   if (session) { try { const r = await authFetch('/api/me'); if (r.ok) myInfo = await r.json(); } catch (_) {} }
   renderAccount(); renderMyPanel();
-  // 분석 화면의 매일 기록 버튼도 로그인 상태에 맞게 다시
   blogs.forEach((b) => { b.watch = null; loadWatch(b); });
 }
 function renderAccount() {
-  const el = document.getElementById('account');
+  const el = $('account');
   if (!sbc) { el.innerHTML = ''; return; }
   el.innerHTML = session
-    ? `<span>${esc((session.user && session.user.email) || '')}${myInfo ? ` · ${esc(myInfo.planName)}` : ''}</span><button type="button" class="ghost" id="logoutBtn">로그아웃</button>`
-    : '<button type="button" class="ghost" id="loginBtn">로그인</button>';
-  if (session) document.getElementById('loginBox').classList.add('hidden');
+    ? `<span>${esc((session.user && session.user.email) || '')}${myInfo ? `, ${esc(myInfo.planName)}` : ''}</span><button type="button" class="btn" id="logoutBtn">로그아웃</button>`
+    : '<button type="button" class="btn" id="loginBtn">로그인</button>';
+  if (session) $('loginBox').classList.add('hidden');
 }
 let mySel = new Set(), mySeen = new Set();
 function renderMyPanel(msg, isErr) {
-  const el = document.getElementById('myPanel');
+  const el = $('myPanel');
   if (!session || !myInfo) { el.classList.add('hidden'); return; }
   el.classList.remove('hidden');
   const me = myInfo.blogs.find((b) => b.role === 'me'), comps = myInfo.blogs.filter((b) => b.role === 'competitor');
   [...mySel].forEach((id) => { if (!comps.some((c) => c.blogId === id)) mySel.delete(id); });
-  // 처음 보는 경쟁 블로그는 선택이 2개 미만이면 자동으로 비교에 넣는다 (사용자가 직접 뺀 건 다시 넣지 않음)
   comps.forEach((c) => { if (!mySeen.has(c.blogId)) { mySeen.add(c.blogId); if (mySel.size < 2) mySel.add(c.blogId); } });
-  const chip = (b, isMe) => `<span class="mychip${!isMe && mySel.has(b.blogId) ? ' sel' : ''}">${isMe ? '<span class="role me">내 블로그</span>'
+  const chip = (b, isMe) => `<span class="mychip${!isMe && mySel.has(b.blogId) ? ' sel' : ''}">${isMe ? '<b style="color:var(--me);font-size:12px">내 블로그</b>'
     : `<label title="비교에 넣기 (최대 2개)"><input type="checkbox" data-mysel="${esc(b.blogId)}"${mySel.has(b.blogId) ? ' checked' : ''}>경쟁</label>`}
     ${esc(b.name || b.blogId)}<button type="button" data-myrm="${esc(b.blogId)}" aria-label="${esc(b.blogId)} 빼기" title="목록에서 빼기 (쌓인 기록은 지우지 않아요)">×</button></span>`;
-  el.innerHTML = `<h2>내 블로그 <small>${esc(myInfo.planName)} 요금제 · 경쟁 블로그 ${comps.length}/${myInfo.limits.competitors}개 · 등록한 블로그는 매일 방문자 수를 기록해요</small></h2>
-    <div class="mylist">${me ? chip(me, true) : '<span class="hint">내 블로그를 먼저 등록해 주세요.</span>'}${comps.map((c) => chip(c, false)).join('')}</div>
+  el.innerHTML = `<h2>내 블로그 <small>${esc(myInfo.planName)} 요금제, 경쟁 블로그 ${comps.length}/${myInfo.limits.competitors}개. 등록한 블로그는 매일 방문자 수를 기록해요.</small></h2>
+    <div class="mylist">${me ? chip(me, true) : '<span class="small">내 블로그를 먼저 등록해 주세요.</span>'}${comps.map((c) => chip(c, false)).join('')}</div>
     <form class="myadd" id="myAddForm"><input id="myAddId" type="text" placeholder="블로그 주소나 아이디" autocomplete="off" />
       <select id="myAddRole"><option value="${me ? 'competitor' : 'me'}">${me ? '경쟁 블로그로' : '내 블로그로'}</option><option value="${me ? 'me' : 'competitor'}">${me ? '내 블로그로 (바꾸기)' : '경쟁 블로그로'}</option></select>
-      <button type="submit" class="ghost">등록</button>
-      ${me ? '<button type="button" id="myCompare">선택한 블로그로 비교하기</button>' : ''}</form>
+      <button type="submit" class="btn">등록</button>
+      ${me ? '<button type="button" class="btn primary" id="myCompare">선택한 블로그로 비교하기</button>' : ''}</form>
     ${msg ? `<p class="mymsg${isErr ? ' err' : ''}">${esc(msg)}</p>` : ''}`;
 }
 async function myAction(body) {
@@ -759,13 +849,18 @@ async function myAction(body) {
 }
 document.addEventListener('click', async (ev) => {
   const t = ev.target;
-  if (t.id === 'loginBtn') { const bx = document.getElementById('loginBox'); bx.classList.toggle('hidden');  }
+  if (t.id === 'loginBtn') $('loginBox').classList.toggle('hidden');
   if (t.id === 'logoutBtn' && sbc) { await sbc.auth.signOut(); session = null; onLoginChanged(); }
   if (t.dataset && t.dataset.myrm) myAction({ action: 'remove', blogId: t.dataset.myrm });
   if (t.id === 'myCompare' && myInfo) {
     const me = myInfo.blogs.find((b) => b.role === 'me'); const sel = [...mySel].slice(0, 2);
-    document.getElementById('qMe').value = me ? me.blogId : ''; document.getElementById('qC1').value = sel[0] || ''; document.getElementById('qC2').value = sel[1] || '';
-    document.getElementById('f').requestSubmit();
+    $('qMe').value = me ? me.blogId : ''; $('qC1').value = sel[0] || ''; $('qC2').value = sel[1] || '';
+    $('f').requestSubmit();
+  }
+  if (t.closest && t.closest('[data-naver]')) { location.href = '/api/auth-naver'; return; }
+  if (t.dataset && t.dataset.oauth && sbc) {
+    const { error } = await sbc.auth.signInWithOAuth({ provider: t.dataset.oauth, options: { redirectTo: location.origin + location.pathname } });
+    if (error) $('loginMsg').textContent = '로그인하지 못했어요: ' + error.message;
   }
 });
 document.addEventListener('change', (ev) => {
@@ -773,80 +868,53 @@ document.addEventListener('change', (ev) => {
   if (t.checked) { if (mySel.size >= 2) { t.checked = false; renderMyPanel('비교에는 경쟁 블로그를 2개까지 넣을 수 있어요.', true); return; } mySel.add(t.dataset.mysel); } else mySel.delete(t.dataset.mysel);
   renderMyPanel();
 });
-document.addEventListener('submit', async (ev) => {
-  if (ev.target.id === 'myAddForm') {
-    ev.preventDefault();
-    const id = parseIds(document.getElementById('myAddId').value)[0];
-    if (!id) return renderMyPanel('블로그 주소나 아이디를 넣어 주세요.', true);
-    myAction({ action: 'add', blogId: id, role: document.getElementById('myAddRole').value });
-  }
+document.addEventListener('submit', (ev) => {
+  if (ev.target.id !== 'myAddForm') return;
+  ev.preventDefault();
+  const id = parseIds($('myAddId').value)[0];
+  if (!id) return renderMyPanel('블로그 주소나 아이디를 넣어 주세요.', true);
+  myAction({ action: 'add', blogId: id, role: $('myAddRole').value });
 });
 
-// 로그인 오류 문구를 알아듣기 쉽게
-function authMsg(e) {
-  const m = String((e && e.message) || e || '');
-  if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요. 처음이면 회원가입을 눌러 주세요.';
-  if (/already registered|already been registered/i.test(m)) return '이미 가입된 이메일이에요. 로그인을 눌러 주세요.';
-  if (/Email not confirmed/i.test(m)) return '가입 확인 메일의 링크를 먼저 눌러 주세요.';
-  if (/at least 6|Password should/i.test(m)) return '비밀번호는 6자 이상이어야 해요.';
-  if (/rate limit|too many/i.test(m)) return '요청이 많아 잠시 막혔어요. 몇 분 뒤 다시 시도해 주세요.';
-  return '처리하지 못했어요: ' + m;
-}
-document.addEventListener('click', async (ev) => {
-  const t = ev.target;
-  if (t.closest && t.closest('[data-naver]')) { location.href = '/api/auth-naver'; return; }
-  if (t.dataset && t.dataset.oauth && sbc) {
-    const { error } = await sbc.auth.signInWithOAuth({ provider: t.dataset.oauth, options: { redirectTo: location.origin + location.pathname } });
-    if (error) document.getElementById('loginMsg').textContent = authMsg(error);
-  }
-});
-
-// ---- 매일 기록 등록 ----
+// ---- 매일 기록 ----
 async function loadWatch(b) {
   if (b.watch) return;
   b.watch = { status: 'loading' };
   try {
     const r = await (await authFetch('/api/watch?id=' + encodeURIComponent(b.data.blogId))).json();
     b.watch = { status: 'ok', registered: !!r.registered, backend: r.backend || 'none', login: r.login };
-    // 내 블로그 자동 등록: 회원 기능이 없을 때, 또는 로그인했는데 아직 내 블로그가 없을 때만
     const noMe = myInfo && !myInfo.blogs.some((x) => x.role === 'me');
     if (b.role === 'me' && !r.registered && r.backend && r.backend !== 'none' && (r.login === undefined || (r.login && noMe))) await setWatch(b, true, true);
   } catch (_) { b.watch = { status: 'error' }; }
-  watchRefresh(b);
+  if (blogs.includes(b)) rBlogs();
 }
 async function setWatch(b, on, silent) {
   const prev = b.watch;
-  b.watch = { ...(prev || {}), status: 'saving' }; if (!silent) watchRefresh(b);
+  b.watch = { ...(prev || {}), status: 'saving' }; if (!silent && blogs.includes(b)) rBlogs();
   try {
     const r = await authFetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: on ? 'register' : 'unregister', role: b.role }) });
     const j = await r.json();
     b.watch = r.ok ? { status: 'ok', registered: !!j.registered, backend: j.backend || prev.backend, login: j.login } : { ...prev, status: 'ok', error: j.error };
     if (r.ok && session) { try { const m = await authFetch('/api/me'); if (m.ok) { myInfo = await m.json(); renderAccount(); renderMyPanel(); } } catch (_) {} }
   } catch (_) { b.watch = { ...prev, status: 'ok', error: '저장하지 못했어요' }; }
-  watchRefresh(b);
-}
-function watchRefresh(b) {
-  if (!blogs.includes(b)) return;
-  if (blogs.length === 1) renderMast(document.getElementById('mast'), b); else { renderCompare(true); }
+  if (blogs.includes(b)) rBlogs();
 }
 function watchControl(b) {
   const w = b.watch, i = blogs.indexOf(b);
-  if (!w || w.status === 'loading') return '<span class="hint">확인 중…</span>';
-  if (w.status === 'error' || w.backend === 'none') return '<span class="hint">저장소 없음</span>';
-  if (w.status === 'saving') return '<span class="hint">저장 중…</span>';
-  if (w.login === false) return sbc ? '<button type="button" class="watchbtn" data-needlogin="1" title="로그인하면 매일 방문자 수를 기록할 수 있어요.">로그인하고 매일 기록</button>' : '<span class="hint">-</span>';
-  const errNote = w.error ? `<span class="hint" style="display:block;margin-top:4px;color:var(--miss)">${esc(w.error)}</span>` : '';
+  if (!w || w.status === 'loading') return '';
+  if (w.status === 'error' || w.backend === 'none') return '';
+  if (w.status === 'saving') return '<span>저장 중…</span>';
+  if (w.login === false) return sbc ? '<button type="button" class="watchbtn" data-needlogin="1">로그인하고 매일 기록</button><span>방문자 수를 매일 쌓아요</span>' : '';
+  const err = w.error ? `<span style="color:var(--miss)">${esc(w.error)}</span>` : '';
   return (w.registered
     ? `<button type="button" class="watchbtn on" data-watch="${i}" data-on="0" title="누르면 매일 기록을 멈춰요. 쌓인 기록은 지우지 않아요.">매일 기록 중</button>`
-    : `<button type="button" class="watchbtn" data-watch="${i}" data-on="1" title="매일 방문자 수를 기록해 다음 날부터 그래프에 나타나요.">매일 기록하기</button>`) + errNote;
+    : `<button type="button" class="watchbtn" data-watch="${i}" data-on="1" title="매일 방문자 수를 기록해 다음 날부터 그래프에 나타나요.">매일 기록하기</button>`) + err;
 }
 document.addEventListener('click', (ev) => {
-  if (ev.target && ev.target.closest && ev.target.closest('[data-needlogin]')) { window.scrollTo({ top: 0, behavior: 'smooth' }); document.getElementById('loginBox').classList.remove('hidden');  return; }
-  const t = ev.target && ev.target.closest && ev.target.closest('[data-watch]');
-  if (!t) return;
-  const b = blogs[+t.dataset.watch]; if (b) setWatch(b, t.dataset.on === '1');
+  if (ev.target.closest && ev.target.closest('[data-needlogin]')) { window.scrollTo({ top: 0, behavior: 'smooth' }); $('loginBox').classList.remove('hidden'); return; }
+  const t = ev.target.closest && ev.target.closest('[data-watch]');
+  if (t) { const b = blogs[+t.dataset.watch]; if (b) setWatch(b, t.dataset.on === '1'); }
 });
-// 제목 노출 확인이 끝나면 오늘 분석 기록에 결과를 남긴다 (블로그마다 한 번)
 function saveExpoOnce(b) {
   if (b.expoSaved || !b.expo || b.expo.status !== 'ok') return;
   b.expoSaved = true;
@@ -854,418 +922,28 @@ function saveExpoOnce(b) {
   authFetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: 'expo', shown: sm.shown, pending: sm.pending, missing: sm.missing, total: sm.n }) }).catch(() => {});
 }
 
-// ---- 인기글 조회수 (비공식) ----
-const popOf = (b) => (b.prof && b.prof.status === 'ok' ? (b.prof.data.popular || []) : null);
-const popViews = (b, logNo) => { const p = popOf(b); const x = p && p.find((q) => q.logNo === logNo); return x ? x.views : null; };
-function popSum(b) { const p = popOf(b); if (!p) return null; const v = p.map((x) => x.views).filter((x) => x != null); return v.length ? v.reduce((a, c) => a + c, 0) : null; }
-function renderPop(b) {
-  const el = document.getElementById('pop'); if (!el) return;
-  if (!b.prof || b.prof.status === 'loading') { el.innerHTML = '<p class="empty">인기글을 불러오고 있어요.</p>'; return; }
-  const p = popOf(b);
-  if (!p || !p.length) { el.innerHTML = '<p class="empty">네이버에서 이 블로그의 인기글을 가져오지 못했어요. 인기글을 공개하지 않은 블로그일 수 있어요.</p>'; return; }
-  const sum = popSum(b), top = p.slice(0, 3);
-  el.innerHTML = `<div class="popsum"><span>지난주 인기글 ${p.length}개 조회수 합 <b>${fmtN(sum)}회</b></span><span>1위 <b>${fmtN(p[0].views)}회</b></span></div>
-    <div class="top3">${top.map((x, i) => `<a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener">
-      <div class="th"${x.thumbnail ? ` style="background-image:url('${esc(x.thumbnail)}')"` : ''}><span class="rank">${i + 1}위</span></div>
-      <div class="bd"><div class="tt">${esc(x.title)}</div><div class="vw"><span><b>${fmtN(x.views)}</b>조회</span><span>${x.date ? fmtDate(x.date).slice(0, 10) : ''}</span></div></div></a>`).join('')}</div>
-    ${p.length > 3 ? `<div class="scroll" style="margin-top:18px"><table><thead><tr><th class="num">순위</th><th>제목</th><th class="num">조회</th><th class="num">공감</th><th class="num">댓글</th><th>발행일</th></tr></thead><tbody>
-      ${p.slice(3).map((x, i) => `<tr><td class="num">${i + 4}</td><td><a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener">${esc(x.title)}</a></td><td class="num">${fmtN(x.views)}</td><td class="num">${fmtN(x.likes)}</td><td class="num">${fmtN(x.comments)}</td><td style="white-space:nowrap">${x.date ? fmtDate(x.date).slice(0, 10) : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
-}
-
-function renderCmpPop() {
-  const el = document.getElementById('cmpPop'); if (!el) return;
-  el.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(240px, 1fr))`;
-  const li = (b, x, i) => `<li><span class="n">${i + 1}</span><a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(x.logNo)}" target="_blank" rel="noopener" title="${esc(x.title)}">${esc(x.title)}</a><span class="v">${fmtN(x.views)}</span></li>`;
-  el.innerHTML = blogs.map((b, bi) => {
-    const head = `<h3>${dotOf(bi)}${roleTag(b)}${esc(nameOf(b))}</h3>`;
-    if (profLoading(b)) return `<div class="col popmini${rc(b)}">${head}<p class="empty">불러오고 있어요.</p></div>`;
-    const p = popOf(b);
-    if (!p || !p.length) return `<div class="col popmini${rc(b)}">${head}<p class="empty">인기글을 가져오지 못했어요.</p></div>`;
-    return `<div class="col popmini${rc(b)}">${head}<div class="sum"><span>지난주 인기글 ${p.length}개 조회수 합</span><span><b>${fmtN(popSum(b))}</b> 회</span></div>
-      <ol>${p.slice(0, 3).map((x, i) => li(b, x, i)).join('')}</ol>
-      ${p.length > 3 ? `<details><summary>4~${p.length}위 보기</summary><ol>${p.slice(3).map((x, i) => li(b, x, i + 3)).join('')}</ol></details>` : ''}</div>`;
-  }).join('');
-}
-
-// ---- 방문자 추이 (비공식) ----
-async function loadVisitors(b) {
-  if (b.vis) return;
-  b.vis = { status: 'loading' };
-  try { const r = await fetch('/api/visitors?id=' + encodeURIComponent(b.data.blogId)); const body = await r.json(); b.vis = r.ok ? { status: 'ok', data: body } : { status: 'error' }; }
-  catch (_) { b.vis = { status: 'error' }; }
-  if (!blogs.includes(b)) return;
-  if (blogs.length === 1) renderVisit(b); else renderCmpVisit();
-}
-// 저장 기록·위젯 값에 오늘 지금까지 값(프로필)을 더한 날짜별 목록
-function visitDays(b) {
-  if (!b.vis || b.vis.status !== 'ok') return [];
-  const days = b.vis.data.days.map((d) => ({ ...d }));
-  const pr = b.prof && b.prof.status === 'ok' && b.prof.data.profile;
-  const today = new Date(Date.now() + 9 * 36e5).toISOString().slice(0, 10);
-  const t = days.find((d) => d.date === today);
-  if (pr && pr.todayVisitors != null) { if (t) { t.count = pr.todayVisitors; t.partial = true; } else days.push({ date: today, count: pr.todayVisitors, partial: true }); }
-  return days.sort((x, y) => x.date.localeCompare(y.date)).slice(-30);
-}
-let visitChart = null;
-function renderVisit(b) {
-  const el = document.getElementById('visit'); if (!el) return;
-  if (!b.vis || b.vis.status === 'loading') { el.innerHTML = '<p class="empty">방문자 수를 불러오고 있어요.</p>'; return; }
-  const days = visitDays(b), v = b.vis.data || {};
-  const full = days.filter((d) => !d.partial);
-  document.getElementById('visitNote').textContent = v.widget ? '블로그에 공개된 방문자 위젯 값과, 매일 저장한 누적 방문자 수의 차이로 계산했어요.' : '매일 저장한 누적 방문자 수의 차이로 계산했어요.';
-  if (days.length < 2) {
-    el.innerHTML = `<p class="empty">${v.storage
-      ? '이 블로그는 방문자 위젯을 공개하지 않아서, 오늘부터 매일 누적 방문자 수를 기록해요. 내일부터 하루씩 그래프가 채워집니다.'
-      : '이 블로그는 방문자 위젯을 공개하지 않아서 날짜별 값을 바로 가져올 수 없어요. 매일 기록을 쌓는 저장소를 연결하면 다음 날부터 그래프가 생깁니다.'}</p>`;
-    return;
-  }
-  const max = full.length ? full.reduce((a, d) => (d.count > a.count ? d : a)) : null, min = full.length ? full.reduce((a, d) => (d.count < a.count ? d : a)) : null;
-  const avg = full.length ? Math.round(full.reduce((a, d) => a + d.count, 0) / full.length) : null;
-  const today = days.find((d) => d.partial);
-  const md = (d) => d.date.slice(5).replace('-', '.');
-  el.innerHTML = `<div class="visit"><div><div class="hint" style="margin-bottom:8px">최근 ${days.length}일</div><div class="vstat">
-    ${max ? `<div><span>최고 (${md(max)})</span><b>${fmtN(max.count)}명</b></div>` : ''}${min ? `<div><span>최저 (${md(min)})</span><b>${fmtN(min.count)}명</b></div>` : ''}
-    ${avg != null ? `<div><span>하루 평균</span><b>${fmtN(avg)}명</b></div>` : ''}${today ? `<div><span>오늘 지금까지</span><b>${fmtN(today.count)}명</b></div>` : ''}</div>
-    <p class="hint" style="margin-top:10px">오늘 값은 자정까지 계속 늘어나요.</p></div>
-    <div class="chart-box"><canvas id="cVisit" aria-label="날짜별 방문자 수 선 차트"></canvas></div></div>`;
-  if (visitChart) visitChart.destroy();
-  const c = colorOf(blogs.indexOf(b));
-  visitChart = new Chart(document.getElementById('cVisit'), {
-    type: 'line',
-    data: { labels: days.map(md), datasets: [{ data: days.map((d) => d.count), borderColor: c, backgroundColor: c, borderWidth: 2, tension: 0,
-      pointRadius: days.map((d) => (d.partial ? 4 : 2)), pointBackgroundColor: days.map((d) => (d.partial ? css('--surface') : c)),
-      segment: { borderDash: (ctx) => (days[ctx.p1DataIndex] && days[ctx.p1DataIndex].partial ? [4, 4] : undefined) } }] },
-    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (x) => `${fmtN(x.raw)}명${days[x.dataIndex].partial ? ' (집계 중)' : ''}` } } },
-      scales: { y: { beginAtZero: true, ticks: { callback: (v) => fmtN(v) } }, x: { grid: { display: false } } } },
-  });
-}
-let cmpVisitChart = null;
-function renderCmpVisit() {
-  const el = document.getElementById('cmpVisit'); if (!el) return;
-  // 1) 모든 블로그: 오늘 지금까지 방문자 (블로그 정보에서 바로 가져옴)
-  const today = blogs.map((b) => { const pr = b.prof && b.prof.status === 'ok' && b.prof.data.profile; return { b, v: pr ? pr.todayVisitors : null, total: pr ? pr.totalVisitors : null, loading: profLoading(b) }; });
-  const tmax = Math.max(1, ...today.map((x) => x.v || 0));
-  const todayHtml = `<div class="sub2" style="margin:0 0 10px;font-weight:600;color:var(--ink)">오늘 지금까지 방문자 <span class="hint" style="font-weight:400">자정부터 집계 중</span></div>
-    ${today.map((x) => `<div class="bar" style="grid-template-columns:minmax(0,1fr) 92px"><div class="track"><div class="fill" style="width:${x.v ? Math.max(2, x.v / tmax * 100) : 0}%;background:${colorOf(blogs.indexOf(x.b))};opacity:.35"></div><span class="name">${roleTag(x.b)}${esc(nameOf(x.b))}</span></div><span class="pct" style="color:var(--ink);font-weight:600">${x.loading ? '…' : x.v == null ? '-' : fmtN(x.v) + '명'}</span></div>`).join('')}`;
-  // 2) 날짜별 추이: 위젯을 공개했거나 기록이 쌓인 블로그만
-  const per = blogs.map((b) => ({ b, days: visitDays(b) }));
-  const loadingDays = blogs.some((b) => !b.vis || b.vis.status === 'loading');
-  const withData = per.filter((x) => x.days.length >= 2);
-  const missing = per.filter((x) => x.days.length < 2).map((x) => ({ name: nameOf(x.b), storage: x.b.vis && x.b.vis.data && x.b.vis.data.storage }));
-  const storageOn = missing.some((m) => m.storage);
-  const why = missing.length ? `<p class="hint" style="margin-top:10px">${missing.map((m) => esc(m.name)).join(', ')}: 방문자 위젯이 비공개라 날짜별 값을 네이버가 주지 않아요. ${storageOn ? '오늘부터 매일 누적 방문자 수를 기록해서, 내일부터 그래프에 함께 나타납니다.' : '매일 누적 방문자 수를 기록하는 저장소를 연결하면, 연결한 다음 날부터 함께 비교할 수 있어요.'}</p>` : '';
-  let trend;
-  if (loadingDays) trend = '<p class="empty">날짜별 방문자 수를 불러오고 있어요.</p>';
-  else if (!withData.length) trend = '';
-  else {
-    const body = `<div class="legend">${withData.map((x) => `<span>${dotOf(blogs.indexOf(x.b))}${esc(nameOf(x.b))}</span>`).join('')}</div>
-    <div class="chart-box" style="height:240px"><canvas id="cCmpVisit" aria-label="블로그별 날짜별 방문자 수 선 차트"></canvas></div>`;
-    // 날짜별 값이 한 블로그뿐이면 비교가 안 되므로 접어 둔다
-    trend = withData.length === 1
-      ? `<details class="acc" id="cmpVisitAcc"><summary>날짜별 방문자 <span class="hint">${esc(nameOf(withData[0].b))}만 공개돼 있어요</span></summary>${body}</details>`
-      : `<div class="sub2" style="margin:26px 0 10px;font-weight:600;color:var(--ink)">날짜별 방문자</div>${body}`;
-  }
-  el.innerHTML = todayHtml + trend + (loadingDays ? '' : why);
-  if (cmpVisitChart) { cmpVisitChart.destroy(); cmpVisitChart = null; }
-  if (loadingDays || !withData.length) return;
-  const acc = document.getElementById('cmpVisitAcc');
-  if (acc && !acc.open) { acc.addEventListener('toggle', () => { if (acc.open && !cmpVisitChart) drawCmpVisit(withData); }); return; }
-  drawCmpVisit(withData);
-}
-function drawCmpVisit(withData) {
-  const dates = [...new Set(withData.flatMap((x) => x.days.map((d) => d.date)))].sort();
-  cmpVisitChart = new Chart(document.getElementById('cCmpVisit'), {
-    type: 'line',
-    data: { labels: dates.map((d) => d.slice(5).replace('-', '.')), datasets: withData.map((x) => { const m = new Map(x.days.map((d) => [d.date, d.count])); const c = colorOf(blogs.indexOf(x.b));
-      return { label: nameOf(x.b), data: dates.map((d) => m.has(d) ? m.get(d) : null), borderColor: c, backgroundColor: c, borderWidth: 2, pointRadius: 2, tension: 0, spanGaps: false }; }) },
-    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${fmtN(x.raw)}명` } } },
-      scales: { y: { beginAtZero: true, ticks: { callback: (v) => fmtN(v) } }, x: { grid: { display: false } } } },
-  });
-}
-
-// ---- 프로필·반응 (비공식) ----
-const fmtN = (v) => v == null ? '-' : v.toLocaleString('ko-KR');
-async function loadProfile(b) {
-  if (b.prof) return;
-  b.prof = { status: 'loading' };
-  try {
-    const r = await fetch('/api/profile?id=' + encodeURIComponent(b.data.blogId));
-    const body = await r.json();
-    b.prof = r.ok ? { status: 'ok', data: body, map: new Map((body.posts || []).map((x) => [x.logNo, x])) } : { status: 'error' };
-  } catch (_) { b.prof = { status: 'error' }; }
-  if (!blogs.includes(b)) return;
-  if (blogs.length === 1) { renderMast(document.getElementById('mast'), b); renderKpis(b); renderPosts(); renderPop(b); if (b.vis && b.vis.status === 'ok') renderVisit(b); }
-  else { renderCompare(true); renderCmpPosts(); renderCmpVisit(); renderCmpPop(); }
-}
-const logNoOfItem = (it) => (it.link.match(/\/(\d{9,})/) || [])[1];
-const reactOf = (b, it) => (b.prof && b.prof.map ? b.prof.map.get(logNoOfItem(it)) : null);
-function reactStats(b) {
-  if (!b.prof || b.prof.status !== 'ok') return null;
-  const rs = (b.stats.items || []).map((it) => reactOf(b, it)).filter(Boolean);
-  if (!rs.length) return { n: 0 };
-  const avg = (k) => { const v = rs.map((x) => x[k]).filter((x) => x != null); return v.length ? Math.round(v.reduce((a, c) => a + c, 0) / v.length * 10) / 10 : null; };
-  return { n: rs.length, likes: avg('likes'), comments: avg('comments') };
-}
-function verdictOf(b) {
-  const e = b.expo;
-  if (!e) return b.role === 'me' ? ['최근 글 30건의 검색 노출을 확인하고 있어요', ''] : ['제목 노출은 아직 확인하지 않았어요', '경쟁 블로그는 아래 버튼을 눌렀을 때만 확인해요.'];
-  if (e.status === 'loading') return [`최근 글 제목을 검색하고 있어요 (${e.done}/${e.total})`, ''];
-  if (e.status !== 'ok') return ['제목 노출을 확인하지 못했어요', e.message || ''];
-  const sm = expoSummary(e.data), t = e.total || sm.n;
-  const why = `최근 글 ${t}건을 제목으로 검색해 확인했어요.`;
-  if (sm.shown === t) return [`최근 글 ${t}건 모두 <mark>검색에 나오고 있어요</mark>`, why];
-  const parts = [sm.missing ? `${sm.missing}건이 누락` : '', sm.pending ? `${sm.pending}건이 반영중` : ''].filter(Boolean).join(', ');
-  return [`최근 글 ${t}건 중 <mark>${sm.shown}건</mark>이 검색에 나오고, ${parts}이에요`, why + ' 누락은 게시물 목록의 \'직접 확인\'으로 한 번 더 확인하세요.'];
-}
-const mateLabel = (pr) => pr && pr.naverMate ? `네이버 메이트${pr.mate && pr.mate.topic ? ' · ' + pr.mate.topic : ''}${pr.mate && pr.mate.month ? ` (${pr.mate.year}년 ${pr.mate.month}월)` : ''}` : '';
-const inflSearch = (b) => { const pr = b.prof && b.prof.status === 'ok' && b.prof.data.profile; const q = (pr && pr.nickName) || nameOf(b);
-  return 'https://search.naver.com/search.naver?query=' + encodeURIComponent(q + ' 인플루언서'); };
-function renderMast(el, b) {
-  if (!el || !b) return;
-  const d = b.data, pr = b.prof && b.prof.status === 'ok' ? b.prof.data.profile : null;
-  const cover = pr && pr.coverImage ? pr.coverImage.replace(/^http:\/\/([a-z0-9]+)\.phinf\.naver\.net/i, 'https://$1-phinf.pstatic.net').replace(/^http:/, 'https:') : '';
-  el.style.backgroundImage = cover ? `url("${cover.replace(/"/g, '%22')}")` : '';
-  const badges = pr ? [pr.officialBlog && '공식 블로그', pr.powerBlog && '파워블로그', pr.influencerHome && '인플루언서', pr.naverMate && mateLabel(pr)].filter(Boolean) : [];
-  const link = d.channel.link || 'https://blog.naver.com/' + d.blogId;
-  const facts = [pr && pr.nickName ? esc(pr.nickName) : '', esc('blog.naver.com/' + d.blogId), pr && pr.topic ? esc(pr.topic) : '',
-    pr && pr.neighbors != null ? `이웃 ${fmtN(pr.neighbors)}명` : '', pr && pr.totalVisitors != null ? `누적 방문 ${fmtN(pr.totalVisitors)}명` : ''].filter(Boolean);
-  const [v, why] = verdictOf(b);
-  el.innerHTML = `<a class="open" href="${esc(link)}" target="_blank" rel="noopener">블로그 열기</a>
-    <div class="who">${d.channel.image ? `<img src="${esc(d.channel.image)}" alt="" referrerpolicy="no-referrer">` : ''}
-      <div style="min-width:0"><div class="name">${roleTag(b)}<a href="${esc(link)}" target="_blank" rel="noopener">${esc(d.channel.title || d.blogId)}</a>${badges.map((x) => `<span class="badge">${x}</span>`).join('')}</div>
-      <div class="facts">${facts.map((f) => `<span>${f}</span>`).join('')}</div></div></div>
-    <div class="watchrow">${watchControl(b)}</div>
-    <p class="verdict">${v}</p>${why ? `<p class="why">${esc(why).replace(/&#39;/g, "'")}</p>` : ''}`;
-}
-const gapText = (g) => g == null ? '' : g * 24 < 1 ? `보통 ${Math.max(1, Math.round(g * 1440))}분 간격` : g < 1 ? `보통 ${Math.round(g * 24)}시간 간격` : `보통 ${r1(g)}일 간격`;
-function renderKpis(b) {
-  const s = b.stats, pr = b.prof && b.prof.status === 'ok' ? b.prof.data.profile : null, rs = reactStats(b);
-  const e = b.expo && b.expo.status === 'ok' ? expoSummary(b.expo.data) : null;
-  const wait = b.prof && b.prof.status === 'loading' ? '…' : '-';
-  const k = [
-    [e ? `${e.shown}<small>/${b.expo.total || e.n}건</small>` : '-', '최근 글 검색 노출', e ? (e.missing ? `누락 ${e.missing}건` : '누락 없음') : ''],
-    [pr && pr.todayVisitors != null ? `${fmtN(pr.todayVisitors)}<small>명</small>` : wait, '오늘 방문자', '자정부터 지금까지'],
-    [pr && pr.totalVisitors != null ? `${fmtN(pr.totalVisitors)}<small>명</small>` : wait, '누적 방문자', ''],
-    [pr && pr.neighbors != null ? `${fmtN(pr.neighbors)}<small>명</small>` : wait, '이웃 수', ''],
-    s.perWeek >= 7 ? [`${Math.round(s.perWeek / 7 * 10) / 10}<small>회</small>`, '하루 평균 발행', gapText(s.medGapRaw)] : [`${s.perWeek ?? '-'}<small>회</small>`, '주 평균 발행', gapText(s.medGapRaw)],
-    [rs && rs.likes != null ? `${rs.likes}<small>개</small>` : wait, '글당 평균 공감', rs && rs.comments != null ? `댓글은 평균 ${rs.comments}개` : ''],
-  ];
-  const ci = pr && pr.citations;
-  k.push([ci && ci.thisMonth != null ? `${fmtN(ci.thisMonth)}<small>회</small>` : (b.prof && b.prof.status === 'loading' ? '…' : '-'), 'AI 브리핑 인용 (이번 달)',
-    ci && ci.cumulative != null ? `누적 ${fmtN(ci.cumulative)}회` : (pr ? '인용 기록 없음' : '')]);
-  k.push([pr ? (pr.naverMate ? '선정' : '아님') : (b.prof && b.prof.status === 'loading' ? '…' : '-'), '네이버 메이트', pr && pr.naverMate ? esc(mateLabel(pr).replace('네이버 메이트 · ', '')) : (pr ? (pr.influencerHome ? '인플루언서 확인됨' : `<a href="${inflSearch(b)}" target="_blank" rel="noopener" style="color:inherit">인플루언서는 직접 확인</a>`) : '')]);
-  const ps = popSum(b);
-  k.push([ps != null ? `${fmtN(ps)}<small>회</small>` : wait, '지난주 인기글 조회수 합', ps != null ? `인기글 ${popOf(b).length}개 기준` : '']);
-  document.getElementById('kpis').innerHTML = k.map(([v, l, n]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div>${n ? `<div class="n">${n}</div>` : ''}</div>`).join('');
-}
-
-const profLoading = (b) => !b.prof || b.prof.status === 'loading';
-const PV = (b, k) => (profLoading(b) ? '…' : b.prof.status === 'ok' && b.prof.data.profile ? b.prof.data.profile[k] : null);
-const RV = (b, k) => { if (profLoading(b)) return '…'; const r = reactStats(b); return r ? r[k] : null; };
-function renderCmpExpo() {
-  const me = blogs.find((b) => b.role === 'me');
-  const sec = document.getElementById('cmpExpoSec');
-  sec.classList.toggle('hidden', !me);
-  if (!me) return;
-  document.getElementById('cmpExpoName').textContent = '제목을 블로그 검색에 넣어 내 글이 나오는지 확인합니다.';
-  renderMast(document.getElementById('cmpMast'), me);
-  renderExpo(document.getElementById('cmpExpo'), me);
-}
-function renderCompare(tableOnly) {
-  const view = document.getElementById('cmpView');
-  view.classList.toggle('hidden', blogs.length < 2);
-  if (blogs.length < 2) return;
-  const live = blogs.filter((b) => b.stats.n);
-  Chart.defaults.color = css('--muted'); Chart.defaults.borderColor = css('--line');
-
-  // 1) 비교표: 숫자 + 진단 (best: 높을수록 좋음 'hi', 낮을수록 좋음 'lo')
-  const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
-  const rows = [
-    ['sec', '발행'],
-    ['분석된 글 수', (s) => s.n], ['주 평균 발행', (s) => s.perWeek, 'hi'], ['발행 간격 중앙값(시간)', (s) => (s.medGapRaw == null ? null : Math.round(s.medGapRaw * 24 * 10) / 10), 'lo'],
-    ['최근 30일 발행', (s) => s.last30, 'hi'], ['마지막 발행(일 전)', (s) => Math.round(s.daysSinceLast), 'lo'],
-    ['최장 공백(일)', (s) => s.maxGap, 'lo'], ['글 없는 주', (s) => `${s.zeroWeeks}/${s.weeks.length}주`],
-    ['주력 요일', (s) => s.topDays.map((d) => DAYS[d]).join('·')], ['주력 시간대', (s) => s.topHours.map((h) => h + '시').join('·')],
-    ['sec', '콘텐츠'],
-    ['카테고리 수', (s) => s.cats.size], ['최다 카테고리', (s) => { const [c] = topN(s.cats, 1); return `${esc(c[0])} ${Math.round(c[1] / s.n * 100)}%`; }],
-    ['글당 평균 태그', (s) => s.avgTags, 'hi'], ['태그 없는 글', (s) => s.noTag, 'lo'], ['제목 평균 길이(자)', (s) => s.avgTitle],
-    ['대표 이미지 포함률', (s) => s.thumbRate + '%'],
-    ['sec', '매일 기록'],
-    ['방문자 수 매일 기록', (s, b) => watchControl(b)],
-    ['sec', '배지와 인증'],
-    ['블로그 주제', (s, b) => (profLoading(b) ? '…' : (PV(b, 'topic') || null))],
-    ['네이버 메이트', (s, b) => { if (profLoading(b)) return '…'; const pr = b.prof.status === 'ok' && b.prof.data.profile; return pr ? (pr.naverMate ? `<b style="color:var(--ok)">선정</b> <span class="hint">${esc(mateLabel(pr).replace('네이버 메이트 · ', ''))}</span>` : '아님') : null; }],
-    ['AI 브리핑 인용 (이번 달)', (s, b) => { if (profLoading(b)) return '…'; const c = PV(b, 'citations'); return c ? c.thisMonth : null; }, 'hi'],
-    ['AI 브리핑 인용 (누적)', (s, b) => { if (profLoading(b)) return '…'; const c = PV(b, 'citations'); return c ? c.cumulative : null; }, 'hi'],
-    ['인플루언서', (s, b) => { if (profLoading(b)) return '…'; const h = PV(b, 'influencerHome');
-      return h ? `<a href="${esc(h)}" target="_blank" rel="noopener" style="color:var(--ok);font-weight:700;text-decoration:none">확인됨</a> <span class="hint">${esc(h.replace('https://', ''))}</span>` : `<span class="hint">자동 확인 안 됨</span> <a href="${inflSearch(b)}" target="_blank" rel="noopener" class="verify" style="margin:0">직접 확인</a>`; }],
-    ['sec', '규모와 반응'],
-    ['이웃 수', (s, b) => PV(b, 'neighbors'), 'hi'], ['누적 방문자', (s, b) => PV(b, 'totalVisitors'), 'hi'], ['오늘 방문자', (s, b) => PV(b, 'todayVisitors'), 'hi'],
-    ['글당 평균 공감', (s, b) => RV(b, 'likes'), 'hi'], ['글당 평균 댓글', (s, b) => RV(b, 'comments'), 'hi'],
-    ['지난주 인기글 10개 조회수 합', (s, b) => (profLoading(b) ? '…' : popSum(b)), 'hi'], ['지난주 인기글 1위 조회수', (s, b) => { if (profLoading(b)) return '…'; const p = popOf(b); return p && p[0] ? p[0].views : null; }, 'hi'],
-    ['sec', '제목 노출 (최근 글 30개)'],
-    ['정상', 'shown'], ['반영중', 'pending'], ['누락', 'missing'],
-    ['sec', '운영 진단 (참고 기준)'],
-    ...['발행량', '꾸준함', '최근 활동', '태그 활용'].map((label, k) => [label, (s) => { const d = diagnose(s)[k]; return `<span class="pill ${d[1]}">${L[d[1]]}</span>`; }]),
-  ];
-  const head = `<colgroup><col>${blogs.map((b) => `<col class="${rc(b).trim()}">`).join('')}</colgroup><thead><tr><th></th>${blogs.map((b, i) => `<th class="num${rc(b)}">${roleTag(b)}<br>${dotOf(i)}<a href="${esc(b.data.channel.link || 'https://blog.naver.com/' + b.data.blogId)}" target="_blank" rel="noopener" style="color:inherit">${esc(nameOf(b))}</a></th>`).join('')}</tr></thead>`;
-  const body = rows.map(([label, f, dir]) => {
-    if (label === 'sec') return `<tr class="sec"><td colspan="${blogs.length + 1}">${f}</td></tr>`;
-    if (typeof f === 'string') {
-      const vals = blogs.map((b) => { const e = b.expo; if (!e) return b.role === 'me' ? null : { ask: blogs.indexOf(b) }; if (e.status === 'loading') return { loading: `${e.done}/${e.total}` }; if (e.status !== 'ok') return -1; const sm = expoSummary(e.data); return { v: sm[f], n: sm.n }; });
-      const nums = vals.filter((v) => v && v !== -1 && !v.loading && v.ask === undefined).map((v) => v.v);
-      const best = f === 'pending' || new Set(nums).size < 2 ? null : f === 'shown' ? Math.max(...nums) : Math.min(...nums);
-      return `<tr><td>${label}</td>${vals.map((v) => `<td class="num${v && v !== -1 && !v.loading && v.ask === undefined && v.v === best ? ' best' : ''}">${v === null ? '<span class="hint">확인 중…</span>' : v.ask !== undefined ? (f === 'shown' ? `<button type="button" class="ghost expoBtn" data-expo="${v.ask}">노출 확인하기</button>` : '<span class="hint">-</span>') : v.loading ? `<span class="hint">확인 중 ${v.loading}</span>` : v === -1 ? '<span class="hint">-</span>' : (v.v === best ? `<mark class="best">${v.v}/${v.n}</mark>` : `${v.v}/${v.n}`)}</td>`).join('')}</tr>`;
-    }
-    const vals = blogs.map((b) => (b.stats.n ? f(b.stats, b) : null));
-    let best = null;
-    if (dir) { const nums = vals.filter((v) => typeof v === 'number'); if (new Set(nums).size > 1) best = dir === 'hi' ? Math.max(...nums) : Math.min(...nums); }
-    return `<tr><td>${label}</td>${vals.map((v) => `<td class="num">${best !== null && v === best ? `<mark class="best">${typeof v === 'number' && v >= 1000 ? fmtN(v) : v}</mark>` : (v == null ? '-' : typeof v === 'number' && v >= 1000 ? fmtN(v) : v)}</td>`).join('')}</tr>`;
-  }).join('');
-  document.getElementById('cmpTable').innerHTML = head + '<tbody>' + body + '</tbody>';
-  renderCmpExpo();
-  if (tableOnly) return;
-  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); loadWatch(b); });
-  renderCmpVisit(); renderCmpPop();
-  document.getElementById('cmpMeta').innerHTML = blogs.map((b) => b.stats.n
-    ? `${esc(nameOf(b))}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${esc(nameOf(b))}: 공개 글 없음`).join('<br>') + `<br>${fmtDate(blogs[0].data.fetchedAt)}에 분석`;
-
-  clearCharts();
-  if (!live.length) return;
-  document.getElementById('cmpLegend').innerHTML = blogs.map((b, i) => `<span>${dotOf(i)}${esc(nameOf(b))}</span>`).join('');
-
-  // 2) 주차별 추이: 전체 블로그의 기간을 합친 공통 축
-  // 블로그마다 최근 30개 글이 덮는 기간이 다르므로, 모두 데이터가 있는 기간(가장 늦게 시작하는 블로그 기준)만 비교한다
-  const first = new Date(Math.max(...live.map((b) => weekStart(b.stats.oldest).getTime())));
-  const last = new Date(Math.max(...live.map((b) => weekStart(b.stats.newest).getTime())));
-  const keys = []; for (let w = first; w <= last; w = new Date(w.getTime() + 7 * 864e5)) keys.push(w.toISOString().slice(0, 10));
-  const cut = live.filter((b) => weekStart(b.stats.oldest).getTime() < first.getTime());
-  const weekCard = document.getElementById('cmpWeekNote').closest('.card');
-  weekCard.classList.toggle('hidden', keys.length < MIN_WEEKS);
-  if (keys.length < MIN_WEEKS) { document.getElementById('cmpWeekHint').classList.remove('hidden'); } else document.getElementById('cmpWeekHint').classList.add('hidden');
-  document.getElementById('cmpWeekNote').textContent = `${keys[0].slice(5).replace('-', '/')}주부터 ${keys[keys.length - 1].slice(5).replace('-', '/')}주까지 ${keys.length}주, 모든 블로그의 데이터가 있는 기간만 비교합니다.`
-    + (cut.length ? ` ${live.find((b) => weekStart(b.stats.oldest).getTime() === first.getTime()) ? nameOf(live.find((b) => weekStart(b.stats.oldest).getTime() === first.getTime())) : ''}의 최근 글 30개가 이 시점까지만 거슬러 가기 때문이에요.` : '');
-  charts.push(new Chart(document.getElementById('cmpWeek'), {
-    type: 'line',
-    data: { labels: keys.map((k) => k.slice(2).replace(/-/g, '/')), datasets: blogs.map((b, i) => {
-      if (!b.stats.n) return { label: nameOf(b), data: [] };
-      const m = new Map(b.stats.items.map((it) => weekStart(it.pubDate).toISOString().slice(0, 10)).reduce((acc, k) => (acc.set(k, (acc.get(k) || 0) + 1), acc), new Map()));
-      const lo = weekStart(b.stats.oldest).getTime(), hi = weekStart(b.stats.newest).getTime();
-      return { label: nameOf(b), borderColor: colorOf(i), backgroundColor: colorOf(i), borderWidth: 2, pointRadius: 2, tension: 0, spanGaps: false,
-        data: keys.map((k) => { const t = new Date(k).getTime(); return t < lo || t > hi ? null : (m.get(k) || 0); }) };
-    }) },
-    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } },
-      scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: '글 수' } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } } } },
-  }));
-
-  // 3) 요일·시간대 비중(%)
-  const pct = (arr, n) => arr.map((v) => (n ? Math.round(v / n * 1000) / 10 : 0));
-  const dayOrder = [1, 2, 3, 4, 5, 6, 0];
-  charts.push(new Chart(document.getElementById('cmpDay'), {
-    type: 'bar',
-    data: { labels: dayOrder.map((d) => DAYS[d]), datasets: blogs.map((b, i) => ({ label: nameOf(b), backgroundColor: colorOf(i), borderRadius: 3,
-      data: b.stats.n ? pct(dayOrder.map((d) => b.stats.heat[d].reduce((a, c) => a + c, 0)), b.stats.n) : [] })) },
-    options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw}%` } } },
-      scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + '%' } }, x: { grid: { display: false } } } },
-  }));
-  charts.push(new Chart(document.getElementById('cmpHour'), {
-    type: 'line',
-    data: { labels: Array.from({ length: 24 }, (_, h) => h + '시'), datasets: blogs.map((b, i) => ({ label: nameOf(b), borderColor: colorOf(i), backgroundColor: colorOf(i), borderWidth: 2, pointRadius: 0, tension: .3,
-      data: b.stats.n ? pct(Array.from({ length: 24 }, (_, h) => b.stats.heat.reduce((a, r) => a + r[h], 0)), b.stats.n) : [] })) },
-    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.raw}%` } } },
-      scales: { y: { beginAtZero: true, ticks: { callback: (v) => v + '%' } }, x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } } } },
-  }));
-
-  // 4) 블로그별 열: 카테고리 TOP5 + 태그 TOP12 (공통 태그 표시)
-  const tagOwners = new Map();
-  blogs.forEach((b) => b.stats.n && b.stats.tags.forEach((_, t) => tagOwners.set(t, (tagOwners.get(t) || 0) + 1)));
-  const colsEl = document.getElementById('cmpCols');
-  colsEl.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(220px, 1fr))`;
-  colsEl.innerHTML = blogs.map((b, i) => {
-    const s = b.stats;
-    if (!s.n) return `<div class="col${rc(b)}"><h3>${dotOf(i)}${roleTag(b)}${esc(nameOf(b))}</h3><span class="hint">공개 글 없음</span></div>`;
-    const cats = topN(s.cats, 5).map(([c, v]) => { const p = Math.round(v / s.n * 100);
-      return `<div class="bar"><div class="track"><div class="fill" style="width:${p}%;background:${colorOf(i)}"></div><span class="name">${esc(c)}</span></div><span class="pct">${p}%</span></div>`; }).join('');
-    const tags = topN(s.tags, 12).map(([t, v]) => `<span class="chip${tagOwners.get(t) > 1 ? ' shared' : ''}">${esc(t)}<b>${v}</b></span>`).join('') || '<span class="hint">태그 없음</span>';
-    return `<div class="col${rc(b)}"><h3>${dotOf(i)}${roleTag(b)}${esc(nameOf(b))}</h3><div class="sub2" style="margin-top:0">카테고리 TOP 5</div>${cats}<div class="sub2">태그 TOP 12</div><div class="chips">${tags}</div></div>`;
-  }).join('');
-
-  cmpLimit = 15;
-  renderCmpPosts();
-}
-
-function allPosts() {
-  return blogs.flatMap((b, i) => (b.stats.items || []).map((it) => ({ ...it, bi: i }))).sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-}
-let cmpLimit = 15;
-function renderCmpPosts() {
-  const q = document.getElementById('cmpFilter').value.trim().toLowerCase();
-  const match = (i) => !q || (i.title + ' ' + i.tags.join(' ') + ' ' + i.category).toLowerCase().includes(q);
-  const lists = blogs.map((b) => (b.stats.items || []).filter(match));
-  const el = document.getElementById('cmpPosts');
-  el.style.gridTemplateColumns = `repeat(${blogs.length}, minmax(220px, 1fr))`;
-  el.innerHTML = blogs.map((b, bi) => {
-    const list = lists[bi];
-    const items = list.slice(0, cmpLimit).map((i) => `<li><a href="${esc(i.link)}" target="_blank" rel="noopener">${esc(i.title)}</a>
-      <div class="pm">${fmtDate(i.pubDate)}<span class="sep"></span>${esc(i.category)}${reactOf(b, i) ? `<span class="sep"></span>공감 ${fmtN(reactOf(b, i).likes)}<span class="sep"></span>댓글 ${fmtN(reactOf(b, i).comments)}` : ''}</div></li>`).join('');
-    return `<div class="col${rc(b)}"><h3>${dotOf(bi)}${roleTag(b)}${esc(nameOf(b))}<span class="cnt">${Math.min(cmpLimit, list.length)}/${list.length}</span></h3>
-      ${items ? `<ul class="plist">${items}</ul>` : '<span class="hint">해당하는 글이 없어요</span>'}</div>`;
-  }).join('');
-  const more = document.getElementById('cmpMore');
-  const rest = Math.max(0, ...lists.map((l) => l.length - cmpLimit));
-  more.hidden = rest <= 0;
-  more.textContent = `블로그별 15개 더 보기`;
-}
-
-function downloadCsv(filename, rows) {
-  const q = (v) => '"' + String(v).replace(/"/g, '""') + '"';
-  const blob = new Blob(['﻿' + rows.map((r) => r.map(q).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-}
-
-document.getElementById('f').onsubmit = async (e) => {
+// ---- 분석 시작 ----
+$('f').onsubmit = async (e) => {
   e.preventDefault();
-  const roles = [['me', 'qMe'], ['c1', 'qC1'], ['c2', 'qC2']]
-    .map(([role, el]) => ({ role, id: parseIds(document.getElementById(el).value)[0] })).filter((x) => x.id);
-  const seen = new Set(); const entries = roles.filter((x) => !seen.has(x.id) && seen.add(x.id));
-  const ids = entries.map((x) => x.id);
-  const err = document.getElementById('err');
+  const entries = []; const seen = new Set();
+  [['me', 'qMe'], ['c1', 'qC1'], ['c2', 'qC2']].forEach(([role, el]) => { const id = parseIds($(el).value)[0]; if (id && !seen.has(id)) { seen.add(id); entries.push({ role, id }); } });
+  const err = $('err');
   err.classList.add('hidden');
-  if (!ids.length) { err.textContent = '블로그 주소나 아이디를 하나 이상 입력해 주세요.'; err.classList.remove('hidden'); return; }
-  const btn = document.querySelector('#f button'); btn.disabled = true; btn.textContent = '불러오는 중…';
-  const results = await Promise.all(ids.map((id) => fetch('/api/rss?id=' + encodeURIComponent(id))
+  if (!entries.length) { err.textContent = '블로그 주소나 아이디를 하나 이상 넣어 주세요.'; err.classList.remove('hidden'); return; }
+  const btn = document.querySelector('#f .btn'); btn.disabled = true; btn.textContent = '불러오는 중…';
+  const results = await Promise.all(entries.map(({ id }) => fetch('/api/rss?id=' + encodeURIComponent(id))
     .then(async (r) => ({ id, ok: r.ok, body: await r.json() })).catch(() => ({ id, ok: false, body: { error: '네트워크 오류' } }))));
   btn.disabled = false; btn.textContent = '분석하기';
   const fails = results.filter((r) => !r.ok);
-  if (fails.length) { err.innerHTML = fails.map((f) => `<b>${esc(f.id)}</b>: ${esc(f.body.error)}`).join('<br>'); err.classList.remove('hidden'); }
-  blogs = results.map((r, i) => ({ r, role: entries[i].role })).filter((x) => x.r.ok)
-    .map((x) => ({ data: x.r.body, stats: analyze(x.r.body), role: x.role }));
-  current = 0;
+  if (fails.length) { err.innerHTML = fails.map((f) => `<b>${esc(f.id)}</b>: ${esc(f.body.error)} 블로그 아이디가 맞는지 확인해 주세요. 인플루언서 주소(in.naver.com)의 이름은 블로그 아이디와 다를 수 있어요.`).join('<br>'); err.classList.remove('hidden'); }
+  blogs = results.map((r, i) => ({ r, role: entries[i].role })).filter((x) => x.r.ok).map((x) => ({ data: x.r.body, stats: analyze(x.r.body), role: x.role }));
   history.replaceState(null, '', '?' + entries.map((x) => `${x.role}=${encodeURIComponent(x.id)}`).join('&'));
-  document.getElementById('result').classList.add('hidden');
-  document.getElementById('cmpView').classList.add('hidden');
-  if (!blogs.length) return;
-  document.getElementById('intro').classList.add('hidden');
-  if (blogs.length === 1) render(); else renderCompare();
+  if (!blogs.length) { $('report').classList.add('hidden'); return; }
+  renderReport();
 };
-
-document.getElementById('filter').oninput = renderPosts;
-document.getElementById('csv').onclick = () => {
-  const b = blogs[current]; if (!b) return;
-  downloadCsv(`${b.data.blogId}_posts.csv`, [['발행일(KST)', '제목', '카테고리', '태그', '태그수', 'URL'],
-    ...b.stats.items.map((i) => [fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link])]);
-};
-document.getElementById('cmpFilter').oninput = () => { cmpLimit = 15; renderCmpPosts(); };
-document.getElementById('cmpMore').onclick = () => { cmpLimit += 15; renderCmpPosts(); };
-document.getElementById('cmpCsv').onclick = () => {
-  downloadCsv(`blog_compare_${blogs.map((b) => b.data.blogId).join('_')}.csv`, [['블로그', '발행일(KST)', '제목', '카테고리', '태그', '태그수', 'URL'],
-    ...allPosts().map((i) => [nameOf(blogs[i.bi]), fmtDate(i.pubDate), i.title, i.category, i.tags.join(' '), i.tags.length, i.link])]);
-};
-
-document.getElementById('demo').onclick = () => {
-  document.getElementById('qMe').value = 'blogpeople'; document.getElementById('qC1').value = 'naverofficial'; document.getElementById('qC2').value = 'naver_search';
-  document.getElementById('f').requestSubmit();
-};
+$('demo').onclick = () => { $('qMe').value = 'blogpeople'; $('qC1').value = 'naverofficial'; $('qC2').value = 'naver_search'; $('f').requestSubmit(); };
+$('introStrip').innerHTML = 'sppppppmppppppmpppppppppmpppppp'.slice(0, 30).split('').map((c) => `<span class="${{ p: 'shown', s: 'pending', m: 'missing' }[c]}"></span>`).join('');
+addEventListener('resize', () => { if (blogs.length) rBlogs(); });
 initAuth();
 // 주소로 바로 열기: ?me=아이디&c1=아이디&c2=아이디 (예전 형식 ?id=a,b,c 도 지원)
 (() => {
@@ -1273,8 +951,8 @@ initAuth();
   const legacy = (sp.get('id') || '').split(',').map((x) => x.trim()).filter(Boolean);
   const vals = { qMe: sp.get('me') || legacy[0], qC1: sp.get('c1') || legacy[1], qC2: sp.get('c2') || legacy[2] };
   let any = false;
-  Object.entries(vals).forEach(([el, v]) => { if (v) { document.getElementById(el).value = v; any = true; } });
-  if (any) document.getElementById('f').requestSubmit();
+  Object.entries(vals).forEach(([el, v]) => { if (v) { $(el).value = v; any = true; } });
+  if (any) $('f').requestSubmit();
 })();
 </script>
 </body>
