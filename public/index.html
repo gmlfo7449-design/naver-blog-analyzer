@@ -513,7 +513,8 @@ function rBlogs() {
       if (pr.powerBlog) tags.push('<span class="tag yes">파워블로그</span>');
       if (pr.naverMate) tags.push(`<span class="tag yes">${esc(mateLabel(pr))}</span>`);
       tags.push(pr.influencerHome ? `<a class="tag yes" href="${esc(pr.influencerHome)}" target="_blank" rel="noopener">인플루언서</a>`
-        : `<a class="tag" href="${inflSearch(b)}" target="_blank" rel="noopener" title="자동으로 확인되지 않았어요. 눌러서 직접 확인">인플루언서 직접 확인</a>`);
+        : pr.influencerStatus === 'no' ? '<span class="tag" title="이 블로그 글의 네이버 검색 결과에 인플루언서 표시가 없어요">인플루언서 아님</span>'
+        : `<a class="tag" href="${inflSearch(b)}" target="_blank" rel="noopener" title="검색 결과에서 이 블로그 글을 찾지 못해 확인하지 못했어요. 눌러서 직접 확인">인플루언서 확인 안 됨</a>`);
     }
     return `<article class="bcard" style="${cv(b)}">
       <div class="av" style="${d.channel.image ? `background-image:url('${esc(d.channel.image)}')` : ''}"></div>

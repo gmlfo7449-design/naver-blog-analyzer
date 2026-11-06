@@ -44,7 +44,9 @@ async function influencerFromSearch(id, title) {
     if (!r.ok) return null;
     const html = await r.text();
     const re = new RegExp(`blog\\.naver\\.com\\/${id.replace(/[-]/g, '\\-')}(?=[\\/"?])`, 'gi');
+    let seen = false;
     for (const m of html.matchAll(re)) {
+      seen = true;
       // 이 글 링크 바로 앞 작성자 영역에서 인플루언서 홈 링크를 찾는다. 사이에 다른 블로그 링크가 끼면 다른 글이므로 버린다
       const before = html.slice(Math.max(0, m.index - 6000), m.index);
       const homes = [...before.matchAll(/href="https:\/\/in\.naver\.com\/([\w.-]{2,40})"/g)];
@@ -52,16 +54,23 @@ async function influencerFromSearch(id, title) {
       const last = homes[homes.length - 1];
       const between = before.slice(last.index);
       const others = [...between.matchAll(/blog\.naver\.com\/([\w-]{3,30})/g)].filter((x) => x[1].toLowerCase() !== id.toLowerCase());
-      if (!others.length) return `https://in.naver.com/${last[1]}`;
+      if (!others.length) return { home: `https://in.naver.com/${last[1]}` };
     }
-    return null;
+    // 이 블로그 글이 검색 결과에 나왔는데 인플루언서 홈 링크가 없으면 '아님'의 근거가 된다
+    return seen ? { seen: true } : null;
   } catch (_) { return null; }
 }
 async function influencerHome(id, titles = []) {
   if (await homeLinksBlog(id, id)) return { url: `https://in.naver.com/${id}`, via: 'home' };
   // 방금 쓴 글은 아직 검색에 없을 수 있어 며칠 지난 글부터 최대 3개 시도
-  for (const t of titles.slice(0, 3)) { const s = await influencerFromSearch(id, t); if (s) return { url: s, via: 'search' }; }
-  return null;
+  let seen = false;
+  for (const t of titles.slice(0, 3)) {
+    const s = await influencerFromSearch(id, t);
+    if (s && s.home) return { url: s.home, via: 'search' };
+    if (s && s.seen) seen = true; // 다른 글에서 인플루언서 표시가 나올 수 있어 3개 모두 본다
+  }
+  // 검색 결과에서 이 블로그 글을 직접 봤는데 인플루언서 표시가 없으면 '아님', 글을 못 찾았으면 '알 수 없음'
+  return seen ? { none: true } : null;
 }
 
 async function load(id) {
@@ -89,7 +98,8 @@ async function load(id) {
       citations: r.mateCitations ? { thisMonth: num(r.mateCitations.currentMonthCount), month: num(r.mateCitations.currentMonth),
         cumulative: num(r.mateCitations.cumulativeCount), period: num(r.mateCitations.selectionPeriodCount), periodMonth: num(r.mateCitations.selectionPeriodMonth) } : null,
       topic: r.blogDirectoryName || '',
-      influencerHome: infl.status === 'fulfilled' && infl.value ? infl.value.url : null,
+      influencerHome: infl.status === 'fulfilled' && infl.value && infl.value.url ? infl.value.url : null,
+      influencerStatus: infl.status !== 'fulfilled' || !infl.value ? 'unknown' : infl.value.url ? 'yes' : 'no',
       influencerVia: infl.status === 'fulfilled' && infl.value ? infl.value.via : null,
       coverImage: (r.mobileTitleImage && (r.mobileTitleImage.croppedImage || r.mobileTitleImage.originalImage)) || '',
       profileImage: r.profileImagePath || '',
