@@ -1,0 +1,18 @@
+# 10분마다 홈판 수집 주소를 부른다. 저장소 Settings → Secrets and variables → Actions 에
+# CRON_SECRET (Vercel에 넣은 것과 같은 값)을 넣어야 동작한다.
+name: 홈판 수집
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: 홈판 수집 실행
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then echo "CRON_SECRET 비밀값이 없어요"; exit 1; fi
+          curl -fsS --max-time 90 -H "Authorization: Bearer $CRON_SECRET" https://naver-blog-analyzer.vercel.app/api/cron-homefeed

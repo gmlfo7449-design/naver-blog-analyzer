@@ -128,6 +128,25 @@
   .strip { display: grid; grid-template-columns: repeat(30, minmax(0, 1fr)); gap: 3px; }
   .strip > * { height: 30px; border-radius: 3px; background: var(--empty); display: block; }
   .strip .shown { background: var(--ok); } .strip .pending { background: var(--wait); } .strip .missing { background: var(--miss); }
+  .strip .hm { position: relative; }
+  .strip .hm::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1.5px rgba(23, 32, 51, .35); }
+  .hfeed { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 26px; }
+  .hbig { display: flex; align-items: baseline; gap: 6px; margin: 4px 0 2px; }
+  .hbig b { font-size: 34px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--c); line-height: 1.1; }
+  .hbig span { font-size: 14px; color: var(--muted); }
+  .hmeta { font-size: 13px; color: var(--muted); }
+  .hratio { margin: 12px 0 4px; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; }
+  .hratio b { color: var(--ink); }
+  .hbar { height: 8px; border-radius: 4px; background: var(--line2); overflow: hidden; }
+  .hbar i { display: block; height: 100%; background: var(--c); border-radius: 4px; }
+  .hpl { list-style: none; margin: 12px 0 0; padding: 0; }
+  .hpl li { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 9px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line2); font-size: 13.5px; }
+  .hpl .th { width: 38px; height: 38px; border-radius: 6px; background: var(--line2) center / cover; }
+  .hpl a { text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; } .hpl a:hover { text-decoration: underline; }
+  .hpl small { display: block; font-size: 12px; color: var(--faint); }
+  .hpl .n { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; text-align: right; }
+  .hchip { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 1px 6px; border-radius: 5px; background: var(--ink); color: var(--surface); margin-left: 6px; vertical-align: 1px; }
+  @media (max-width: 860px) { .hfeed { grid-template-columns: 1fr; } }
   .strip .rerr { background: repeating-linear-gradient(45deg, var(--empty) 0 4px, var(--line) 4px 8px); }
   .strip a.missing:hover, .strip a.pending:hover { outline: 2px solid var(--ink); outline-offset: 1px; }
   .strip .loading { animation: pulse 1.2s ease-in-out infinite; }
@@ -338,8 +357,13 @@
       <div class="ph"><div><p class="verdict" id="verdict"></p><p id="verdictSub"></p></div></div>
       <div id="expoRows"></div>
       <div class="eaxis"><span></span><div><span>최신 글</span><span>30번째 글</span></div><span></span></div>
-      <div class="legend" style="margin-top:14px"><span><i style="background:var(--ok)"></i>정상: 검색에 나옴</span><span><i style="background:var(--wait)"></i>반영중: 발행 1시간 이내, 아직 검색에 없음</span><span><i style="background:var(--miss)"></i>누락: 1시간이 지났는데 검색에 없음</span></div>
+      <div class="legend" style="margin-top:14px"><span><i style="background:var(--ok)"></i>정상: 검색에 나옴</span><span><i style="background:var(--wait)"></i>반영중: 발행 1시간 이내, 아직 검색에 없음</span><span><i style="background:var(--miss)"></i>누락: 1시간이 지났는데 검색에 없음</span><span id="hmLegend" class="hidden"><i style="background:var(--ok);position:relative;box-shadow:inset 0 0 0 3px var(--ok),inset 0 0 0 10px #fff"></i>흰 점: 최근 7일 홈판에 뜬 글</span></div>
       <p class="note">검색 API가 실제 블로그 탭에 있는 글을 빠뜨리기도 해요. 빨간 칸을 누르면 네이버 블로그 탭에서 그 제목을 바로 검색해 직접 확인할 수 있어요.</p>
+    </section>
+
+    <section class="panel" id="sHome">
+      <div class="ph"><div><h2>홈판 노출 <small class="muted" style="font-weight:500;font-size:13px">최근 7일</small></h2><p id="homeSub">네이버 모바일 메인 홈피드에 뜬 글을 10분마다 확인해 기록해요.</p></div></div>
+      <div id="home"></div>
     </section>
 
     <section class="panel">
@@ -508,15 +532,15 @@ function rExpo() {
     const e = b.expo, total = Math.min(POST_LIMIT, b.stats.n || 0);
     let cells = '', count = '';
     if (!e) {
-      cells = Array.from({ length: total }, () => '<span></span>').join('');
+      cells = Array.from({ length: total }, (_, k) => `<span class="${hm(b, k)}"></span>`).join('');
       count = b.role === 'me' ? '<span>준비 중</span>' : `<button type="button" class="btn" data-expo="${i}" title="글 30개를 검색하므로 검색 API를 30회 써요">노출 확인하기</button>`;
     } else if (e.status !== 'ok' && e.status !== 'loading') {
       cells = Array.from({ length: total }, () => '<span class="rerr"></span>').join('');
       count = `<span>${esc(e.message || '확인하지 못했어요')}</span>`;
     } else {
-      cells = e.data.results.map((x) => x.status === 'shown' ? `<span class="shown" title="${esc(x.title)}: 정상"></span>`
-        : `<a class="${stCls(x)}" href="${naverBlogSearch(x.title)}" target="_blank" rel="noopener" title="${esc(x.title)}: ${ST[x.status]} (눌러서 직접 확인)"></a>`).join('')
-        + Array.from({ length: Math.max(0, total - e.data.results.length) }, () => '<span class="loading"></span>').join('');
+      cells = e.data.results.map((x, k) => x.status === 'shown' ? `<span class="shown${hm(b, k)}" title="${esc(x.title)}: 정상${hm(b, k) ? ', 홈판 노출' : ''}"></span>`
+        : `<a class="${stCls(x)}${hm(b, k)}" href="${naverBlogSearch(x.title)}" target="_blank" rel="noopener" title="${esc(x.title)}: ${ST[x.status]} (눌러서 직접 확인)"></a>`).join('')
+        + Array.from({ length: Math.max(0, total - e.data.results.length) }, (_, j) => `<span class="loading${hm(b, e.data.results.length + j)}"></span>`).join('');
       const s = expoSummary(e.data);
       count = e.status === 'loading' ? `<span>확인 중 ${e.done}/${e.total}</span>`
         : `<span class="ok"><b>${s.shown}</b>정상</span><span><b>${s.pending}</b>반영중</span><span class="ms"><b>${s.missing}</b>누락</span>${s.error ? `<button type="button" class="btn" data-retry="${i}">실패 ${s.error}개 다시</button>` : ''}`;
@@ -545,6 +569,49 @@ document.addEventListener('click', (ev) => {
   const b = blogs[+(t.dataset.retry ?? t.dataset.expo)];
   if (b) { gaugeLive = true; loadExposure(b, t.dataset.retry !== undefined); }
 });
+
+// ---- 홈판 노출 (비공식 수집 기록) ----
+async function loadHome(b) {
+  if (b.home) return;
+  b.home = { status: 'loading' };
+  try { const r = await fetch('/api/homefeed?id=' + encodeURIComponent(b.data.blogId)); const body = await r.json(); b.home = r.ok ? { status: 'ok', data: body } : { status: 'error' }; }
+  catch (_) { b.home = { status: 'error' }; }
+  if (!blogs.includes(b)) return;
+  rHome(); rExpo(); rScore(); rPosts(); updateGauge();
+}
+const homeOf = (b) => (b.home && b.home.status === 'ok' && b.home.data.enabled ? b.home.data : null);
+// 메인 홈판에 뜬 글 번호 모음 (주제판은 제외)
+const homeSet = (b) => { const h = homeOf(b); return new Set(h ? h.posts.filter((p) => p.homeHits > 0).map((p) => p.logNo) : []); };
+const hm = (b, k) => { const it = b.stats.items && b.stats.items[k]; return it && homeSet(b).has(logNoOfItem(it)) ? ' hm' : ''; };
+const TABNAME = { mainEconomy: '경제', mainLivingFood: '리빙·푸드', mainTravelCafe: '여행', mainFashionBeauty: '패션·뷰티', mainHealth: '건강', mainKnowledge: '지식', mainCarTech: '자동차·테크', mainGame: '게임' };
+const ago = (iso) => { if (!iso) return ''; const m = (Date.now() - new Date(iso)) / 6e4; return m < 60 ? `${Math.max(1, Math.round(m))}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
+function rHome() {
+  const el = $('home'); if (!el) return;
+  const any = blogs.map(homeOf).find(Boolean);
+  if (blogs.some((b) => !b.home || b.home.status === 'loading')) { el.innerHTML = '<p class="empty">홈판 기록을 불러오고 있어요.</p>'; return; }
+  const first = blogs.find((b) => b.home.data && b.home.data.setup);
+  if (!any) { el.innerHTML = `<p class="empty">${first ? '홈판 기록 저장소를 준비하고 있어요. (데이터베이스 설정 전)' : '홈판 기록을 불러오지 못했어요.'}</p>`; $('hmLegend').classList.add('hidden'); return; }
+  $('homeSub').textContent = `네이버 모바일 메인 홈피드를 10분마다 확인해 기록해요. 로그인하지 않은 기본 피드 기준 표본이라, 실제 노출의 일부만 잡혀요. ${any.since ? fmtDate(any.since).slice(0, 10) + '부터 수집, ' : ''}최근 7일 확인 ${fmtN(any.runs)}회.`;
+  $('hmLegend').classList.toggle('hidden', !blogs.some((b) => homeSet(b).size));
+  const hmax = Math.max(1, ...blogs.map((b) => (homeOf(b) ? homeOf(b).home.hits : 0)));
+  el.innerHTML = `<div class="hfeed" style="--n:${blogs.length}">${blogs.map((b) => {
+    const h = homeOf(b), head = `<div class="colh" style="${cv(b)}"><span class="dot"></span>${esc(nameOf(b))}</div>`;
+    if (!h) return `<div style="${cv(b)}">${head}<p class="empty">기록을 불러오지 못했어요.</p></div>`;
+    const recent = new Set((b.stats.items || []).map(logNoOfItem));
+    const inRecent = h.posts.filter((p) => p.homeHits > 0 && recent.has(p.logNo)).length, n = b.stats.n || 0;
+    const topicNote = h.topic.hits ? `주제판에서도 ${fmtN(h.topic.hits)}회` : '';
+    const list = h.posts.slice(0, 5).map((p) => `<li><span class="th"${p.thumbnail ? ` style="background-image:url('${esc(p.thumbnail.replace(/^http:/, 'https:'))}')"` : ''}></span>
+      <div style="min-width:0"><a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(p.logNo)}" target="_blank" rel="noopener" title="${esc(p.title)}">${esc(p.title)}</a>
+      <small>${p.homeHits ? '홈판' : ''}${p.homeHits && p.topicHits ? ', ' : ''}${p.tabs.filter((t) => t !== 'home').map((t) => (TABNAME[t] || t) + '판').join(', ')} · 마지막 ${ago(p.lastSeen)}</small></div>
+      <span class="n">${fmtN(p.homeHits + p.topicHits)}회</span></li>`).join('');
+    return `<div style="${cv(b)}">${head}
+      <div class="hbig"><b>${fmtN(h.home.hits)}</b><span>회 홈판에서 확인</span></div>
+      <div class="hmeta">${h.home.hits ? `글 ${h.home.posts}개, ${h.home.days}일 동안` : '최근 7일 동안 메인 홈판에서 보이지 않았어요'}${topicNote ? `. ${topicNote}` : ''}</div>
+      <div class="hbar" style="margin-top:8px" title="같은 줄 최댓값 대비"><i style="width:${h.home.hits ? Math.max(2, h.home.hits / hmax * 100) : 0}%"></i></div>
+      <div class="hratio"><span>최근 글 ${n}개 중 홈판에 뜬 글</span><span><b>${inRecent}개</b> (${n ? Math.round(inRecent / n * 100) : 0}%)</span></div>
+      ${list ? `<ul class="hpl">${list}</ul>` : ''}</div>`;
+  }).join('')}</div>`;
+}
 
 // ---- 블로그 카드 ----
 const mateLabel = (pr) => pr && pr.naverMate ? `네이버 메이트${pr.mate && pr.mate.topic ? ' ' + pr.mate.topic : ''}` : '';
@@ -598,6 +665,8 @@ const METRICS = [
   { label: '글당 댓글', unit: '개', get: (b) => (reactStats(b) || {}).comments ?? null, dir: 'hi', prof: true },
   { label: 'AI 브리핑 인용', sub: '이번 달', unit: '회', get: (b) => { const pr = profile(b); return pr && pr.citations ? pr.citations.thisMonth : null; }, dir: 'hi', prof: true,
     note: (b) => { const pr = profile(b); return pr && pr.citations && pr.citations.cumulative != null ? `누적 ${fmtN(pr.citations.cumulative)}회` : ''; } },
+  { label: '홈판 노출', sub: '최근 7일, 확인 횟수', unit: '회', get: (b) => (b.home && b.home.status === 'ok' && b.home.data.enabled ? b.home.data.home.hits : null), dir: 'hi',
+    note: (b) => { const h = homeOf(b); return h ? `${h.home.posts}개 글, ${h.home.days}일` : ''; } },
   { g: '발행' },
   { label: '주 평균 발행', unit: '회', get: (b) => b.stats.perWeek ?? null, dir: 'hi' },
   { label: '보통 발행 간격', sub: '중앙값', get: (b) => b.stats.medGapRaw ?? null, fmt: gapText, dir: 'lo' },
@@ -778,10 +847,11 @@ function rTags() {
 // ---- 게시물 ----
 let postBlog = -1, postLimit = 20;
 function stCell(b, it) {
-  if (!b.expo || !b.expo.map) return b.role === 'me' ? '<span class="st">확인 중</span>' : '<span class="small">-</span>';
+  const chip = homeSet(b).has(logNoOfItem(it)) ? '<span class="hchip" title="최근 7일 홈판에 뜬 글">홈판</span>' : '';
+  if (!b.expo || !b.expo.map) return (b.role === 'me' ? '<span class="st">확인 중</span>' : '<span class="small">-</span>') + chip;
   const x = b.expo.map.get(logNoOfItem(it));
-  if (!x) return b.expo.status === 'loading' ? '<span class="st">확인 중</span>' : '<span class="small">-</span>';
-  return `<span class="st ${stCls(x)}">${ST[x.status]}${x.status !== 'shown' ? ` <a href="${naverBlogSearch(it.title)}" target="_blank" rel="noopener">직접 확인</a>` : ''}</span>`;
+  if (!x) return (b.expo.status === 'loading' ? '<span class="st">확인 중</span>' : '<span class="small">-</span>') + chip;
+  return `<span class="st ${stCls(x)}">${ST[x.status]}${chip}${x.status !== 'shown' ? ` <a href="${naverBlogSearch(it.title)}" target="_blank" rel="noopener">직접 확인</a>` : ''}</span>`;
 }
 const popViews = (b, logNo) => { const p = popOf(b); const x = p && p.find((q) => q.logNo === logNo); return x ? x.views : null; };
 function postRows() {
@@ -834,10 +904,10 @@ function renderReport() {
   $('report').classList.remove('hidden');
   $('intro').classList.add('hidden');
   postBlog = -1; postLimit = 20; $('filter').value = '';
-  rBlogs(); rExpo(); rScore(); rVisit(); rPop(); rPattern(); rTags(); rPosts();
+  rBlogs(); rExpo(); rHome(); rScore(); rVisit(); rPop(); rPattern(); rTags(); rPosts();
   $('foot').innerHTML = blogs.map((b) => b.stats.n ? `${esc(nameOf(b))}: ${fmtDate(b.stats.oldest).slice(0, 10)}부터 ${fmtDate(b.stats.newest).slice(0, 10)}까지 쓴 최근 글 ${b.stats.n}개` : `${esc(nameOf(b))}: 공개 글 없음`).join('<br>')
     + `<br>${fmtDate(blogs[0].data.fetchedAt)}에 분석했어요. 이웃·방문자·공감·조회수·인증 정보는 네이버 모바일 화면의 비공식 값이에요.`;
-  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); loadWatch(b); });
+  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); loadWatch(b); loadHome(b); });
   startGauge();
 }
 
@@ -998,10 +1068,11 @@ function updateGauge() {
   const ex = blogs.filter((b) => b.expo || b.role === 'me');
   const exTotal = ex.reduce((a, b) => a + Math.max(1, Math.min(POST_LIMIT, b.stats.n || 0)), 0);
   const exDone = ex.reduce((a, b) => a + (!b.expo ? 0 : b.expo.status === 'loading' ? b.expo.done : Math.max(1, Math.min(POST_LIMIT, b.stats.n || 0))), 0);
-  const w = ex.length ? { rss: 15, prof: 25, vis: 15, ex: 45 } : { rss: 25, prof: 45, vis: 30, ex: 0 };
-  const pct = w.rss + w.prof * prof / n + w.vis * vis / n + (ex.length ? w.ex * exDone / exTotal : 0);
+  const hom = blogs.filter((b) => b.home && b.home.status !== 'loading').length;
+  const w = ex.length ? { rss: 15, prof: 25, vis: 10, home: 5, ex: 45 } : { rss: 25, prof: 40, vis: 25, home: 10, ex: 0 };
+  const pct = w.rss + w.prof * prof / n + w.vis * vis / n + w.home * hom / n + (ex.length ? w.ex * exDone / exTotal : 0);
   const step = (label, d, t) => `<span class="${d >= t ? 'ok' : ''}">${label} ${d}/${t}</span>`;
-  const steps = '<span class="ok">블로그 글</span>' + step('블로그 정보', prof, n) + step('방문자', vis, n) + (ex.length ? step('제목 노출', exDone, exTotal) : '');
+  const steps = '<span class="ok">블로그 글</span>' + step('블로그 정보', prof, n) + step('방문자', vis, n) + step('홈판', hom, n) + (ex.length ? step('제목 노출', exDone, exTotal) : '');
   const msg = pct >= 100 ? '분석을 마쳤어요' : prof < n ? '이웃·방문자·인기글을 가져오고 있어요' : ex.length && exDone < exTotal ? '최근 글 제목을 하나씩 검색하고 있어요' : '방문자 기록을 모으고 있어요';
   setGauge(Math.min(100, pct), msg, steps);
   if (pct >= 100) gaugeLive = false;

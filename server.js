@@ -10,6 +10,8 @@ const watch = require('./api/watch');
 const me = require('./api/me');
 const config = require('./api/config');
 const authNaver = require('./api/auth-naver');
+const homefeed = require('./api/homefeed');
+const cronHomefeed = require('./api/cron-homefeed');
 
 const PORT = process.env.PORT || 3000;
 
@@ -21,6 +23,8 @@ http.createServer(async (req, res) => {
   }
   if (url.pathname === '/api/me') { req.query = Object.fromEntries(url.searchParams); return me(req, res); }
   if (url.pathname === '/api/auth-naver') { req.query = Object.fromEntries(url.searchParams); return authNaver(req, res); }
+  if (url.pathname === '/api/homefeed') { req.query = Object.fromEntries(url.searchParams); return homefeed(req, res); }
+  if (url.pathname === '/api/cron-homefeed') { req.query = Object.fromEntries(url.searchParams); return cronHomefeed(req, res); }
   if (url.pathname === '/api/config') { req.query = Object.fromEntries(url.searchParams); return config(req, res); }
   if (url.pathname === '/api/watch') {
     req.query = Object.fromEntries(url.searchParams);

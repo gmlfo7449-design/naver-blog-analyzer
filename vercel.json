@@ -8,7 +8,9 @@
     "api/watch.js": { "maxDuration": 15 },
     "api/me.js": { "maxDuration": 15 },
     "api/config.js": { "maxDuration": 10 },
-    "api/auth-naver.js": { "maxDuration": 20 }
+    "api/auth-naver.js": { "maxDuration": 20 },
+    "api/homefeed.js": { "maxDuration": 15 },
+    "api/cron-homefeed.js": { "maxDuration": 60 }
   },
   "headers": [
     { "source": "/", "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }] },
