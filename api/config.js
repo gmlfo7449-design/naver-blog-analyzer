@@ -12,7 +12,5 @@ module.exports = async function handler(req, res) {
     supabaseUrl: store.supabaseOn ? store.SB_URL : '',
     publishableKey: PUB_KEY,
     plans: PLANS,
-    // 설정 확인용: 서버가 보는 관련 변수 '이름'만 (값은 내보내지 않음)
-    envNames: Object.keys(process.env).filter((k) => /SUPABASE|PUBLISHABLE|ANON/i.test(k)).sort(),
   }));
 };
