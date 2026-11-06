@@ -583,6 +583,8 @@ const homeOf = (b) => (b.home && b.home.status === 'ok' && b.home.data.enabled ?
 // 메인 홈판에 뜬 글 번호 모음 (주제판은 제외)
 const homeSet = (b) => { const h = homeOf(b); return new Set(h ? h.posts.filter((p) => p.homeHits > 0).map((p) => p.logNo) : []); };
 const hm = (b, k) => { const it = b.stats.items && b.stats.items[k]; return it && homeSet(b).has(logNoOfItem(it)) ? ' hm' : ''; };
+// 블로그 원본 이미지(blogfiles)는 다른 사이트에서 막히고 무거워서, 네이버 썸네일 서버의 작은 이미지로 바꾼다
+const thumbUrl = (u) => String(u).replace(/^https?:\/\/blogfiles\.naver\.net\/([^?]+).*/, 'https://mblogthumb-phinf.pstatic.net/$1?type=s100').replace(/^http:/, 'https:');
 const TABNAME = { mainEconomy: '경제', mainLivingFood: '리빙·푸드', mainTravelCafe: '여행', mainFashionBeauty: '패션·뷰티', mainHealth: '건강', mainKnowledge: '지식', mainCarTech: '자동차·테크', mainGame: '게임' };
 const ago = (iso) => { if (!iso) return ''; const m = (Date.now() - new Date(iso)) / 6e4; return m < 60 ? `${Math.max(1, Math.round(m))}분 전` : m < 1440 ? `${Math.round(m / 60)}시간 전` : `${Math.round(m / 1440)}일 전`; };
 function rHome() {
@@ -600,7 +602,7 @@ function rHome() {
     const recent = new Set((b.stats.items || []).map(logNoOfItem));
     const inRecent = h.posts.filter((p) => p.homeHits > 0 && recent.has(p.logNo)).length, n = b.stats.n || 0;
     const topicNote = h.topic.hits ? `주제판에서도 ${fmtN(h.topic.hits)}회` : '';
-    const list = h.posts.slice(0, 5).map((p) => `<li><span class="th"${p.thumbnail ? ` style="background-image:url('${esc(p.thumbnail.replace(/^http:/, 'https:'))}')"` : ''}></span>
+    const list = h.posts.slice(0, 5).map((p) => `<li><span class="th"${p.thumbnail ? ` style="background-image:url('${esc(thumbUrl(p.thumbnail))}')"` : ''}></span>
       <div style="min-width:0"><a href="https://blog.naver.com/${esc(b.data.blogId)}/${esc(p.logNo)}" target="_blank" rel="noopener" title="${esc(p.title)}">${esc(p.title)}</a>
       <small>${p.homeHits ? '홈판' : ''}${p.homeHits && p.topicHits ? ', ' : ''}${p.tabs.filter((t) => t !== 'home').map((t) => (TABNAME[t] || t) + '판').join(', ')} · 마지막 ${ago(p.lastSeen)}</small></div>
       <span class="n">${fmtN(p.homeHits + p.topicHits)}회</span></li>`).join('');
