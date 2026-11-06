@@ -231,6 +231,12 @@
   .popsum { display: flex; flex-wrap: wrap; gap: 6px 24px; margin-bottom: 16px; font-size: 14px; color: var(--muted); }
   .popsum b { color: var(--ink); font-variant-numeric: tabular-nums; }
 
+  .watchrow { margin-top: 2px; }
+  .watchbtn { font: inherit; font-size: 12.5px; font-weight: 600; padding: 4px 11px; border-radius: 999px; cursor: pointer; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); }
+  .watchbtn.on { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+  .watchbtn.on::before { content: "● "; }
+  .mast .watchbtn { background: rgba(255,255,255,.12); color: #fff; border-color: rgba(255,255,255,.5); }
+  .mast .watchbtn.on { background: rgba(76,195,138,.25); color: #fff; border-color: #4cc38a; }
   .acc { margin-top: 22px; border: 1px solid var(--rule); border-radius: 12px; background: var(--surface); }
   .acc > summary { cursor: pointer; padding: 14px 16px; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 10px; }
   .acc > summary::-webkit-details-marker { display: none; }
@@ -508,6 +514,7 @@ async function loadExposure(b, force) {
   b.expo.status = 'ok';
   b.expo.data.checkedAt = b.expo.data.checkedAt || new Date().toISOString();
   expoRefresh(b);
+  saveExpoOnce(b);
 }
 function expoRankCell(b, item) {
   if (!b.expo || !b.expo.map) return '';
@@ -587,7 +594,7 @@ function render() {
   renderMast(document.getElementById('mast'), blogs[current]);
   renderKpis(blogs[current]);
   loadProfile(blogs[current]);
-  renderVisit(blogs[current]); loadVisitors(blogs[current]); renderPop(blogs[current]);
+  renderVisit(blogs[current]); loadVisitors(blogs[current]); renderPop(blogs[current]); loadWatch(blogs[current]);
   document.getElementById('insights').innerHTML = insights(s).map((t) => `<li>${t}</li>`).join('');
   renderExpo(); if (blogs[current].role === 'me') loadExposure(blogs[current]);
   const L = { good: '좋음', mid: '보통', bad: '개선 필요', info: '참고' };
@@ -642,6 +649,54 @@ const rc = (b) => (b && b.role ? ' rc-' + b.role : '');
 const roleTag = (b) => b.role ? `<span class="role ${b.role}">${ROLE[b.role]}</span>` : '';
 const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
 const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
+
+// ---- 매일 기록 등록 ----
+async function loadWatch(b) {
+  if (b.watch) return;
+  b.watch = { status: 'loading' };
+  try {
+    const r = await (await fetch('/api/watch?id=' + encodeURIComponent(b.data.blogId))).json();
+    b.watch = { status: 'ok', registered: !!r.registered, backend: r.backend || 'none' };
+    // 내 블로그는 자동으로 매일 기록에 등록
+    if (b.role === 'me' && !r.registered && r.backend && r.backend !== 'none') await setWatch(b, true, true);
+  } catch (_) { b.watch = { status: 'error' }; }
+  watchRefresh(b);
+}
+async function setWatch(b, on, silent) {
+  const prev = b.watch;
+  b.watch = { ...(prev || {}), status: 'saving' }; if (!silent) watchRefresh(b);
+  try {
+    const r = await fetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: on ? 'register' : 'unregister', role: b.role }) });
+    const j = await r.json();
+    b.watch = r.ok ? { status: 'ok', registered: !!j.registered, backend: j.backend || prev.backend } : { ...prev, status: 'ok', error: j.error };
+  } catch (_) { b.watch = { ...prev, status: 'ok', error: '저장하지 못했어요' }; }
+  watchRefresh(b);
+}
+function watchRefresh(b) {
+  if (!blogs.includes(b)) return;
+  if (blogs.length === 1) renderMast(document.getElementById('mast'), b); else { renderCompare(true); }
+}
+function watchControl(b) {
+  const w = b.watch, i = blogs.indexOf(b);
+  if (!w || w.status === 'loading') return '<span class="hint">확인 중…</span>';
+  if (w.status === 'error' || w.backend === 'none') return '<span class="hint">저장소 없음</span>';
+  if (w.status === 'saving') return '<span class="hint">저장 중…</span>';
+  return w.registered
+    ? `<button type="button" class="watchbtn on" data-watch="${i}" data-on="0" title="누르면 매일 기록을 멈춰요. 쌓인 기록은 지우지 않아요.">매일 기록 중</button>`
+    : `<button type="button" class="watchbtn" data-watch="${i}" data-on="1" title="매일 방문자 수를 기록해 다음 날부터 그래프에 나타나요.">매일 기록하기</button>`;
+}
+document.addEventListener('click', (ev) => {
+  const t = ev.target && ev.target.closest && ev.target.closest('[data-watch]');
+  if (!t) return;
+  const b = blogs[+t.dataset.watch]; if (b) setWatch(b, t.dataset.on === '1');
+});
+// 제목 노출 확인이 끝나면 오늘 분석 기록에 결과를 남긴다 (블로그마다 한 번)
+function saveExpoOnce(b) {
+  if (b.expoSaved || !b.expo || b.expo.status !== 'ok') return;
+  b.expoSaved = true;
+  const sm = expoSummary(b.expo.data);
+  fetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: 'expo', shown: sm.shown, pending: sm.pending, missing: sm.missing, total: sm.n }) }).catch(() => {});
+}
 
 // ---- 인기글 조회수 (비공식) ----
 const popOf = (b) => (b.prof && b.prof.status === 'ok' ? (b.prof.data.popular || []) : null);
@@ -823,6 +878,7 @@ function renderMast(el, b) {
     <div class="who">${d.channel.image ? `<img src="${esc(d.channel.image)}" alt="" referrerpolicy="no-referrer">` : ''}
       <div style="min-width:0"><div class="name">${roleTag(b)}<a href="${esc(link)}" target="_blank" rel="noopener">${esc(d.channel.title || d.blogId)}</a>${badges.map((x) => `<span class="badge">${x}</span>`).join('')}</div>
       <div class="facts">${facts.map((f) => `<span>${f}</span>`).join('')}</div></div></div>
+    <div class="watchrow">${watchControl(b)}</div>
     <p class="verdict">${v}</p>${why ? `<p class="why">${esc(why).replace(/&#39;/g, "'")}</p>` : ''}`;
 }
 const gapText = (g) => g == null ? '' : g * 24 < 1 ? `보통 ${Math.max(1, Math.round(g * 1440))}분 간격` : g < 1 ? `보통 ${Math.round(g * 24)}시간 간격` : `보통 ${r1(g)}일 간격`;
@@ -878,6 +934,8 @@ function renderCompare(tableOnly) {
     ['카테고리 수', (s) => s.cats.size], ['최다 카테고리', (s) => { const [c] = topN(s.cats, 1); return `${esc(c[0])} ${Math.round(c[1] / s.n * 100)}%`; }],
     ['글당 평균 태그', (s) => s.avgTags, 'hi'], ['태그 없는 글', (s) => s.noTag, 'lo'], ['제목 평균 길이(자)', (s) => s.avgTitle],
     ['대표 이미지 포함률', (s) => s.thumbRate + '%'],
+    ['sec', '매일 기록'],
+    ['방문자 수 매일 기록', (s, b) => watchControl(b)],
     ['sec', '배지와 인증'],
     ['블로그 주제', (s, b) => (profLoading(b) ? '…' : (PV(b, 'topic') || null))],
     ['네이버 메이트', (s, b) => { if (profLoading(b)) return '…'; const pr = b.prof.status === 'ok' && b.prof.data.profile; return pr ? (pr.naverMate ? `<b style="color:var(--ok)">선정</b> <span class="hint">${esc(mateLabel(pr).replace('네이버 메이트 · ', ''))}</span>` : '아님') : null; }],
@@ -911,7 +969,7 @@ function renderCompare(tableOnly) {
   document.getElementById('cmpTable').innerHTML = head + '<tbody>' + body + '</tbody>';
   renderCmpExpo();
   if (tableOnly) return;
-  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); });
+  blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); loadWatch(b); });
   renderCmpVisit(); renderCmpPop();
   document.getElementById('cmpMeta').innerHTML = blogs.map((b) => b.stats.n
     ? `${esc(nameOf(b))}: ${fmtDate(b.stats.oldest).slice(0, 10)} ~ ${fmtDate(b.stats.newest).slice(0, 10)}` : `${esc(nameOf(b))}: 공개 글 없음`).join('<br>') + `<br>${fmtDate(blogs[0].data.fetchedAt)}에 분석`;

@@ -6,6 +6,7 @@ const rss = require('./api/rss');
 const exposure = require('./api/exposure');
 const profile = require('./api/profile');
 const visitors = require('./api/visitors');
+const watch = require('./api/watch');
 
 const PORT = process.env.PORT || 3000;
 
@@ -14,6 +15,10 @@ http.createServer(async (req, res) => {
   if (url.pathname === '/api/rss') {
     req.query = Object.fromEntries(url.searchParams);
     return rss(req, res);
+  }
+  if (url.pathname === '/api/watch') {
+    req.query = Object.fromEntries(url.searchParams);
+    return watch(req, res);
   }
   if (url.pathname === '/api/visitors') {
     req.query = Object.fromEntries(url.searchParams);

@@ -4,7 +4,8 @@
     "api/rss.js": { "maxDuration": 15 },
     "api/profile.js": { "maxDuration": 15 },
     "api/visitors.js": { "maxDuration": 15 },
-    "api/cron-snapshot.js": { "maxDuration": 60 }
+    "api/cron-snapshot.js": { "maxDuration": 60 },
+    "api/watch.js": { "maxDuration": 15 }
   },
   "headers": [
     { "source": "/", "headers": [{ "key": "Cache-Control", "value": "no-cache, must-revalidate" }] },

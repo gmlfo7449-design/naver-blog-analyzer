@@ -127,17 +127,23 @@ module.exports = async function handler(req, res) {
     const data = await load(id);
     if (!data.profile && !data.posts.length) return send(502, { error: '네이버에서 블로그 정보를 가져오지 못했어요.', errors: data.errors });
     cache.set(id, { at: Date.now(), data });
-    // 분석한 블로그는 매일 누적 방문자 수를 저장할 목록에 넣는다 (저장소가 연결된 경우만)
+    // 분석 기록 저장 (저장소가 연결된 경우만). 매일 기록 '등록'은 화면에서 따로 한다.
+    // 분석할 때 이미 받은 값으로 오늘 자정 시점 누적(지금 누적 - 오늘 방문자)도 함께 남겨, 네이버에 추가 요청 없이 기록을 쌓는다.
     if (data.profile && store.enabled) {
       try {
-        await store.track(id);
-        const today = store.kstDate();
-        const saved = await store.totals(id);
-        // 처음 보는 블로그는 오늘 자정 시점 누적값(지금 누적 - 오늘 방문자)을 바로 기록해 둔다
-        if (saved[today] == null && data.profile.totalVisitors != null && data.profile.todayVisitors != null) {
-          await store.saveTotal(id, today, data.profile.totalVisitors - data.profile.todayVisitors);
-        }
-      } catch (_) { /* 저장 실패는 분석에 영향 주지 않음 */ }
+        const p = data.profile, today = store.kstDate();
+        await store.touchBlog(id, { blog_name: p.blogName, nickname: p.nickName, topic: p.topic });
+        if (p.totalVisitors != null && p.todayVisitors != null) await store.saveTotal(id, today, p.totalVisitors - p.todayVisitors);
+        const avg = (k) => { const v = data.posts.map((x) => x[k]).filter((x) => x != null); return v.length ? Math.round(v.reduce((a, c) => a + c, 0) / v.length * 10) / 10 : null; };
+        const pop = data.popular.map((x) => x.views).filter((x) => x != null);
+        await store.saveSnapshot(id, today, {
+          neighbors: p.neighbors, total_visitors: p.totalVisitors, today_visitors: p.todayVisitors,
+          popular_sum: pop.length ? pop.reduce((a, c) => a + c, 0) : null, avg_likes: avg('likes'), avg_comments: avg('comments'),
+          naver_mate: p.naverMate, mate_topic: p.mate ? p.mate.topic : null,
+          citations_month: p.citations ? p.citations.thisMonth : null, influencer_home: p.influencerHome,
+        });
+        data.stored = store.backend;
+      } catch (e) { data.storeError = e.message; /* 저장 실패는 분석에 영향 주지 않음 */ }
     }
     res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate=3600');
     send(200, data);
