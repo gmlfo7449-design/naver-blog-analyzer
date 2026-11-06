@@ -264,7 +264,17 @@
   .account button { padding: 7px 14px; font-size: 13.5px; }
   .loginbox, .mypanel { margin: 14px 0 18px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; }
   .loginbox form { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; grid-template-columns: none; background: none; border: 0; padding: 0; }
-  .loginbox .field { flex: 1 1 260px; }
+  .loginbox .field { flex: 1 1 220px; }
+  .loginbox form + .hint, .loginbox .hint { margin-top: 10px; }
+  .loginbox .hint a { color: var(--muted); }
+  .loginbox button.ghost { height: 47px; }
+  .social { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .social:empty { display: none; }
+  .social button { flex: 1 1 200px; height: 46px; border-radius: 10px; font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+  .social .kakao { background: #fee500; color: #191600; border: 0; }
+  .social .google { background: #fff; color: #1f1f1f; border: 1px solid #dadce0; }
+  #newPwForm { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-top: 12px; }
+  #newPwForm.hidden { display: none; }
   .loginbox button[type=submit] { height: 47px; }
   .mypanel h2 { font-size: 16px; margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   .mypanel h2 small { font-weight: 400; color: var(--muted); font-size: 13px; }
@@ -300,11 +310,15 @@
 <div class="wrap">
   <div class="topbar"><h1>블로그 발행 분석기</h1><div id="account" class="account"></div></div>
   <div id="loginBox" class="loginbox hidden">
+    <div class="social" id="socialBtns"></div>
     <form id="loginForm">
-      <label class="field"><span class="flabel">이메일로 로그인</span><input id="loginEmail" type="email" placeholder="name@company.com" autocomplete="email" required /></label>
-      <button type="submit">로그인 링크 받기</button>
+      <label class="field"><span class="flabel">이메일</span><input id="loginEmail" type="email" placeholder="name@company.com" autocomplete="email" required /></label>
+      <label class="field"><span class="flabel">비밀번호</span><input id="loginPw" type="password" placeholder="6자 이상" autocomplete="current-password" minlength="6" required /></label>
+      <button type="submit" id="loginSubmit">로그인</button>
+      <button type="button" class="ghost" id="signupBtn">회원가입</button>
     </form>
-    <p class="hint" id="loginMsg">메일로 받은 링크를 누르면 로그인돼요. 처음이면 자동으로 가입돼요.</p>
+    <p class="hint" id="loginMsg">처음이면 이메일과 비밀번호를 넣고 <b>회원가입</b>을 누르세요. <a href="#" id="resetPw">비밀번호를 잊었어요</a></p>
+    <form id="newPwForm" class="hidden"><label class="field"><span class="flabel">새 비밀번호</span><input id="newPw" type="password" minlength="6" autocomplete="new-password" required /></label><button type="submit">비밀번호 바꾸기</button></form>
   </div>
   <section id="myPanel" class="mypanel hidden" aria-label="내 블로그"></section>
   <p class="sub">내 블로그와 경쟁 블로그를 넣으면 최근 글 30개의 발행 주기와 제목 노출 상태를 나란히 비교합니다.</p>
@@ -692,8 +706,17 @@ async function initAuth() {
     const cfg = await (await fetch('/api/config')).json();
     if (!cfg.authEnabled || !window.supabase) { renderAccount(); return; }
     sbc = window.supabase.createClient(cfg.supabaseUrl, cfg.publishableKey, { auth: { persistSession: true, detectSessionInUrl: true } });
+    // Supabase에서 켜 둔 간편 로그인만 버튼으로 보여준다
+    try {
+      const st = await (await fetch(cfg.supabaseUrl + '/auth/v1/settings', { headers: { apikey: cfg.publishableKey } })).json();
+      const ext = st.external || {}, btn = [];
+      if (ext.kakao) btn.push('<button type="button" class="kakao" data-oauth="kakao">카카오로 시작하기</button>');
+      if (ext.google) btn.push('<button type="button" class="google" data-oauth="google">Google로 시작하기</button>');
+      document.getElementById('socialBtns').innerHTML = btn.join('');
+    } catch (_) {}
     session = (await sbc.auth.getSession()).data.session;
-    sbc.auth.onAuthStateChange((_e, s) => { const changed = (s && s.access_token) !== (session && session.access_token); session = s; if (changed) onLoginChanged(); });
+    sbc.auth.onAuthStateChange((ev, s) => {
+      if (ev === 'PASSWORD_RECOVERY') { document.getElementById('loginBox').classList.remove('hidden'); document.getElementById('loginForm').classList.add('hidden'); document.getElementById('newPwForm').classList.remove('hidden'); document.getElementById('loginMsg').textContent = '새 비밀번호를 넣어 주세요.'; } const changed = (s && s.access_token) !== (session && session.access_token); session = s; if (changed) onLoginChanged(); });
     await onLoginChanged();
   } catch (_) { renderAccount(); }
 }
@@ -710,7 +733,7 @@ function renderAccount() {
   el.innerHTML = session
     ? `<span>${esc((session.user && session.user.email) || '')}${myInfo ? ` · ${esc(myInfo.planName)}` : ''}</span><button type="button" class="ghost" id="logoutBtn">로그아웃</button>`
     : '<button type="button" class="ghost" id="loginBtn">로그인</button>';
-  if (session) document.getElementById('loginBox').classList.add('hidden');
+  if (session && document.getElementById('newPwForm').classList.contains('hidden')) document.getElementById('loginBox').classList.add('hidden');
 }
 let mySel = new Set(), mySeen = new Set();
 function renderMyPanel(msg, isErr) {
@@ -755,19 +778,59 @@ document.addEventListener('change', (ev) => {
   renderMyPanel();
 });
 document.addEventListener('submit', async (ev) => {
-  if (ev.target.id === 'loginForm') {
+  if (ev.target.id === 'loginForm') { ev.preventDefault(); emailAuth('login'); }
+  if (ev.target.id === 'newPwForm') {
     ev.preventDefault();
-    const email = document.getElementById('loginEmail').value.trim(), m = document.getElementById('loginMsg');
-    if (!sbc || !email) return;
-    m.textContent = '보내는 중…';
-    const { error } = await sbc.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
-    m.textContent = error ? `보내지 못했어요: ${error.message}` : `${email} 메일함에서 로그인 링크를 눌러 주세요. 메일이 안 보이면 스팸함도 확인해 주세요.`;
+    const { error } = await sbc.auth.updateUser({ password: document.getElementById('newPw').value });
+    document.getElementById('loginMsg').textContent = error ? authMsg(error) : '비밀번호를 바꿨어요.';
+    if (!error) { document.getElementById('newPwForm').classList.add('hidden'); document.getElementById('loginForm').classList.remove('hidden'); document.getElementById('loginBox').classList.add('hidden'); }
   }
   if (ev.target.id === 'myAddForm') {
     ev.preventDefault();
     const id = parseIds(document.getElementById('myAddId').value)[0];
     if (!id) return renderMyPanel('블로그 주소나 아이디를 넣어 주세요.', true);
     myAction({ action: 'add', blogId: id, role: document.getElementById('myAddRole').value });
+  }
+});
+
+// 로그인 오류 문구를 알아듣기 쉽게
+function authMsg(e) {
+  const m = String((e && e.message) || e || '');
+  if (/Invalid login credentials/i.test(m)) return '이메일이나 비밀번호가 맞지 않아요. 처음이면 회원가입을 눌러 주세요.';
+  if (/already registered|already been registered/i.test(m)) return '이미 가입된 이메일이에요. 로그인을 눌러 주세요.';
+  if (/Email not confirmed/i.test(m)) return '가입 확인 메일의 링크를 먼저 눌러 주세요.';
+  if (/at least 6|Password should/i.test(m)) return '비밀번호는 6자 이상이어야 해요.';
+  if (/rate limit|too many/i.test(m)) return '요청이 많아 잠시 막혔어요. 몇 분 뒤 다시 시도해 주세요.';
+  return '처리하지 못했어요: ' + m;
+}
+async function emailAuth(kind) {
+  const email = document.getElementById('loginEmail').value.trim(), pw = document.getElementById('loginPw').value, m = document.getElementById('loginMsg');
+  if (!sbc) return;
+  if (!email || pw.length < 6) { m.textContent = '이메일과 6자 이상 비밀번호를 넣어 주세요.'; return; }
+  m.textContent = kind === 'login' ? '로그인하는 중…' : '가입하는 중…';
+  if (kind === 'login') {
+    const { error } = await sbc.auth.signInWithPassword({ email, password: pw });
+    m.textContent = error ? authMsg(error) : '';
+  } else {
+    const { data, error } = await sbc.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.origin + location.pathname } });
+    if (error) m.textContent = authMsg(error);
+    else if (!data.session) m.textContent = `가입했어요. ${email} 메일함의 확인 링크를 한 번 눌러 주세요.`; // 이메일 확인이 켜져 있을 때
+    else m.textContent = '';
+  }
+}
+document.addEventListener('click', async (ev) => {
+  const t = ev.target;
+  if (t.id === 'signupBtn') emailAuth('signup');
+  if (t.dataset && t.dataset.oauth && sbc) {
+    const { error } = await sbc.auth.signInWithOAuth({ provider: t.dataset.oauth, options: { redirectTo: location.origin + location.pathname } });
+    if (error) document.getElementById('loginMsg').textContent = authMsg(error);
+  }
+  if (t.id === 'resetPw') {
+    ev.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim(), m = document.getElementById('loginMsg');
+    if (!email) { m.textContent = '이메일을 먼저 넣고 다시 눌러 주세요.'; return; }
+    const { error } = await sbc.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    m.textContent = error ? authMsg(error) : `${email}로 비밀번호 재설정 링크를 보냈어요.`;
   }
 });
 
