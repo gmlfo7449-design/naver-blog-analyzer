@@ -219,6 +219,35 @@
   .more { text-align: center; margin-top: 14px; }
   .foot { font-size: 12.5px; color: var(--faint); margin-top: 18px; line-height: 1.7; }
 
+
+  /* 시작 화면: 방울 3개가 차례로 떠오르고 이름이 나온 뒤 사라진다 (세션당 한 번) */
+  #splash { position: fixed; inset: 0; z-index: 100; background: var(--bg); display: grid; place-items: center; animation: splashOut .45s ease 1.65s forwards; }
+  #splash .in { display: grid; justify-items: center; gap: 18px; }
+  #splash .mk { position: relative; width: 92px; height: 80px; }
+  #splash .mk b { position: absolute; border-radius: 50%; mix-blend-mode: multiply; transform: scale(0); animation: pop .55s cubic-bezier(.34, 1.56, .64, 1) forwards; }
+  #splash .mk b:nth-child(1) { width: 56px; height: 56px; left: 0; top: 20px; background: var(--me); animation-delay: .05s; }
+  #splash .mk b:nth-child(2) { width: 40px; height: 40px; left: 38px; top: 0; background: var(--c1); animation-delay: .22s; }
+  #splash .mk b:nth-child(3) { width: 30px; height: 30px; left: 60px; top: 44px; background: var(--c2); animation-delay: .38s; }
+  #splash .ko { font-size: 30px; font-weight: 800; letter-spacing: -0.04em; opacity: 0; animation: rise .5s ease .62s forwards; }
+  #splash .en { font-size: 13px; color: var(--faint); margin-top: -12px; opacity: 0; animation: rise .5s ease .78s forwards; }
+  @keyframes pop { to { transform: scale(1); } }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes splashOut { to { opacity: 0; visibility: hidden; } }
+  html.seen #splash { display: none; }
+  @media (prefers-color-scheme: dark) { #splash .mk b { mix-blend-mode: screen; } }
+  @media (prefers-reduced-motion: reduce) { #splash { animation-delay: .6s; } #splash .mk b, #splash .ko, #splash .en { animation: none; transform: none; opacity: 1; } }
+
+  /* 분석 중 화면: 결과 모양 그대로 회색 틀을 먼저 보여준다 */
+  .sk { background: linear-gradient(90deg, var(--line2) 0%, var(--line) 40%, var(--line2) 80%); background-size: 300% 100%; animation: shimmer 1.3s linear infinite; border-radius: 6px; }
+  @keyframes shimmer { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+  @media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+  .loadmsg { display: flex; align-items: center; gap: 12px; margin-top: 22px; font-size: 14.5px; font-weight: 600; }
+  .loadmsg .bub { display: inline-flex; gap: 5px; }
+  .loadmsg .bub i { width: 9px; height: 9px; border-radius: 50%; background: var(--me); animation: bob 1s ease-in-out infinite; }
+  .loadmsg .bub i:nth-child(2) { background: var(--c1); animation-delay: .15s; } .loadmsg .bub i:nth-child(3) { background: var(--c2); animation-delay: .3s; }
+  @keyframes bob { 0%, 100% { transform: translateY(0); opacity: .5; } 40% { transform: translateY(-6px); opacity: 1; } }
+  .skrow { display: grid; grid-template-columns: 170px minmax(0, 1fr) 190px; gap: 16px; align-items: center; padding: 12px 0; }
+  @media (max-width: 860px) { .skrow { grid-template-columns: 1fr; gap: 8px; } }
   @media (max-width: 860px) {
     .wrap { padding: 16px 16px 60px; }
     form#f { grid-template-columns: 1fr; }
@@ -249,6 +278,8 @@
 </style>
 </head>
 <body>
+<script>try { if (sessionStorage.getItem('bl_splash')) document.documentElement.classList.add('seen'); sessionStorage.setItem('bl_splash', '1'); } catch (_) {}</script>
+<div id="splash" aria-hidden="true"><div class="in"><div class="mk"><b></b><b></b><b></b></div><div class="ko">버블로그린</div><div class="en">bubleloglynn</div></div></div>
 <div class="wrap">
   <header class="top">
     <a class="brand" href="/" aria-label="버블로그린 처음 화면"><span class="mk" aria-hidden="true"><b></b><b></b><b></b></span><span class="ko">버블로그린</span><span class="en">bubleloglynn</span></a>
@@ -282,6 +313,7 @@
     </div>
   </section>
 
+  <section id="skel" class="hidden" aria-live="polite"></section>
   <main id="report" class="hidden">
     <section class="blogs" id="sBlogs"></section>
 
@@ -929,6 +961,24 @@ function saveExpoOnce(b) {
   authFetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: 'expo', shown: sm.shown, pending: sm.pending, missing: sm.missing, total: sm.n }) }).catch(() => {});
 }
 
+// ---- 분석 중 화면 ----
+let skTimer = null;
+function showSkeleton(entries) {
+  const n = entries.length, msgs = ['블로그 글을 불러오고 있어요', '최근 글 30개를 정리하고 있어요', '거의 다 됐어요'];
+  const card = (e) => `<div class="bcard" style="--c:var(--${e.role})"><div class="av sk"></div><div><div class="sk" style="height:11px;width:60px;margin-bottom:6px"></div><div class="sk" style="height:16px;width:70%"></div></div><div class="sk" style="height:11px;width:50%;margin-top:4px"></div></div>`;
+  const row = () => `<div class="skrow"><div class="sk" style="height:14px;width:70%"></div><div class="strip">${'<span class="sk"></span>'.repeat(30)}</div><div class="sk" style="height:20px;width:80%;justify-self:end"></div></div>`;
+  const lines = Array.from({ length: 5 }, () => `<div style="display:grid;grid-template-columns:190px repeat(${n},minmax(0,1fr));gap:18px;padding:10px 0"><div class="sk" style="height:13px;width:60%"></div>${'<div><div class="sk" style="height:14px;width:40%;margin-bottom:6px"></div><div class="sk" style="height:5px"></div></div>'.repeat(n)}</div>`).join('');
+  const el = $('skel');
+  el.innerHTML = `<div class="loadmsg"><span class="bub" aria-hidden="true"><i></i><i></i><i></i></span><span id="skMsg">${msgs[0]}</span></div>
+    <div class="blogs" style="grid-template-columns:repeat(${matchMedia('(max-width: 860px)').matches ? 1 : n},minmax(0,1fr));margin-top:14px">${entries.map(card).join('')}</div>
+    <div class="panel"><div class="sk" style="height:22px;width:45%;margin-bottom:10px"></div><div class="sk" style="height:12px;width:25%;margin-bottom:14px"></div>${entries.map(row).join('')}</div>
+    <div class="panel"><div class="sk" style="height:18px;width:20%;margin-bottom:16px"></div>${lines}</div>`;
+  el.classList.remove('hidden'); $('report').classList.add('hidden'); $('intro').classList.add('hidden');
+  let k = 0; clearInterval(skTimer);
+  skTimer = setInterval(() => { k = Math.min(k + 1, msgs.length - 1); const m = $('skMsg'); if (m) m.textContent = msgs[k]; }, 1400);
+}
+function hideSkeleton() { clearInterval(skTimer); $('skel').classList.add('hidden'); $('skel').innerHTML = ''; }
+
 // ---- 분석 시작 ----
 $('f').onsubmit = async (e) => {
   e.preventDefault();
@@ -938,14 +988,16 @@ $('f').onsubmit = async (e) => {
   err.classList.add('hidden');
   if (!entries.length) { err.textContent = '블로그 주소나 아이디를 하나 이상 넣어 주세요.'; err.classList.remove('hidden'); return; }
   const btn = document.querySelector('#f .btn'); btn.disabled = true; btn.textContent = '불러오는 중…';
+  showSkeleton(entries);
   const results = await Promise.all(entries.map(({ id }) => fetch('/api/rss?id=' + encodeURIComponent(id))
     .then(async (r) => ({ id, ok: r.ok, body: await r.json() })).catch(() => ({ id, ok: false, body: { error: '네트워크 오류' } }))));
   btn.disabled = false; btn.textContent = '분석하기';
+  hideSkeleton();
   const fails = results.filter((r) => !r.ok);
   if (fails.length) { err.innerHTML = fails.map((f) => `<b>${esc(f.id)}</b>: ${esc(f.body.error)} 블로그 아이디가 맞는지 확인해 주세요. 인플루언서 주소(in.naver.com)의 이름은 블로그 아이디와 다를 수 있어요.`).join('<br>'); err.classList.remove('hidden'); }
   blogs = results.map((r, i) => ({ r, role: entries[i].role })).filter((x) => x.r.ok).map((x) => ({ data: x.r.body, stats: analyze(x.r.body), role: x.role }));
   history.replaceState(null, '', '?' + entries.map((x) => `${x.role}=${encodeURIComponent(x.id)}`).join('&'));
-  if (!blogs.length) { $('report').classList.add('hidden'); return; }
+  if (!blogs.length) { $('report').classList.add('hidden'); $('intro').classList.remove('hidden'); return; }
   renderReport();
 };
 $('demo').onclick = () => { $('qMe').value = 'blogpeople'; $('qC1').value = 'naverofficial'; $('qC2').value = 'naver_search'; $('f').requestSubmit(); };
