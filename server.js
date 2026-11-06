@@ -7,6 +7,8 @@ const exposure = require('./api/exposure');
 const profile = require('./api/profile');
 const visitors = require('./api/visitors');
 const watch = require('./api/watch');
+const me = require('./api/me');
+const config = require('./api/config');
 
 const PORT = process.env.PORT || 3000;
 
@@ -16,6 +18,8 @@ http.createServer(async (req, res) => {
     req.query = Object.fromEntries(url.searchParams);
     return rss(req, res);
   }
+  if (url.pathname === '/api/me') { req.query = Object.fromEntries(url.searchParams); return me(req, res); }
+  if (url.pathname === '/api/config') { req.query = Object.fromEntries(url.searchParams); return config(req, res); }
   if (url.pathname === '/api/watch') {
     req.query = Object.fromEntries(url.searchParams);
     return watch(req, res);

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>블로그 발행 분석기</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75,600..800&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" />
@@ -257,6 +258,31 @@
   .popmini details { margin-top: 6px; font-size: 13px; color: var(--muted); }
   .popmini summary { cursor: pointer; padding: 4px 0; }
 
+  /* 계정·내 블로그 */
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .account { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+  .account button { padding: 7px 14px; font-size: 13.5px; }
+  .loginbox, .mypanel { margin: 14px 0 18px; background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 16px; }
+  .loginbox form { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; grid-template-columns: none; background: none; border: 0; padding: 0; }
+  .loginbox .field { flex: 1 1 260px; }
+  .loginbox button[type=submit] { height: 47px; }
+  .mypanel h2 { font-size: 16px; margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .mypanel h2 small { font-weight: 400; color: var(--muted); font-size: 13px; }
+  .mylist { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .mychip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--rule); border-radius: 999px; padding: 5px 6px 5px 12px; font-size: 13.5px; background: var(--bg); }
+  .mychip.sel { border-color: var(--c1); }
+  .mychip button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 15px; padding: 0 6px; }
+  .mychip label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; }
+  form.myadd { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; grid-template-columns: none; background: none; border: 0; border-radius: 0; padding: 0; }
+  form.myadd button { height: auto; padding: 9px 16px; font-size: 14px; }
+  form.myadd button[type=submit] { background: var(--surface); color: var(--ink); border: 1px solid var(--rule); font-weight: 500; }
+  form.myadd #myCompare { background: var(--ink); color: var(--bg); border: 0; margin-left: auto; }
+  @media (max-width: 860px) { form.myadd #myCompare { margin-left: 0; width: 100%; } }
+  .myadd input, .myadd select { padding: 9px 12px; border: 1px solid var(--rule); border-radius: 10px; background: var(--bg); color: var(--ink); font: inherit; font-size: 14px; }
+  .myadd input { flex: 1 1 220px; }
+  .mymsg { margin-top: 8px; font-size: 13px; }
+  .mymsg.err { color: var(--miss); }
+
   /* 첫 화면: 결과 미리보기 */
   #intro { margin-top: 56px; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; }
   @media (max-width: 860px) { #intro { grid-template-columns: 1fr; gap: 20px; } }
@@ -272,7 +298,15 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>블로그 발행 분석기</h1>
+  <div class="topbar"><h1>블로그 발행 분석기</h1><div id="account" class="account"></div></div>
+  <div id="loginBox" class="loginbox hidden">
+    <form id="loginForm">
+      <label class="field"><span class="flabel">이메일로 로그인</span><input id="loginEmail" type="email" placeholder="name@company.com" autocomplete="email" required /></label>
+      <button type="submit">로그인 링크 받기</button>
+    </form>
+    <p class="hint" id="loginMsg">메일로 받은 링크를 누르면 로그인돼요. 처음이면 자동으로 가입돼요.</p>
+  </div>
+  <section id="myPanel" class="mypanel hidden" aria-label="내 블로그"></section>
   <p class="sub">내 블로그와 경쟁 블로그를 넣으면 최근 글 30개의 발행 주기와 제목 노출 상태를 나란히 비교합니다.</p>
 
   <form id="f">
@@ -650,15 +684,103 @@ const roleTag = (b) => b.role ? `<span class="role ${b.role}">${ROLE[b.role]}</s
 const dotOf = (i) => `<span class="dot" style="background:${colorOf(i)}"></span>`;
 const weekStart = (iso) => { const k = kst(iso); const dow = (k.day + 6) % 7; return new Date(Date.UTC(k.y, k.mo, k.d - dow)); };
 
+// ---- 로그인 (Supabase Auth) ----
+let sbc = null, session = null, myInfo = null;
+const authFetch = (url, opt = {}) => fetch(url, { ...opt, headers: { ...(opt.headers || {}), ...(session ? { Authorization: 'Bearer ' + session.access_token } : {}) } });
+async function initAuth() {
+  try {
+    const cfg = await (await fetch('/api/config')).json();
+    if (!cfg.authEnabled || !window.supabase) { renderAccount(); return; }
+    sbc = window.supabase.createClient(cfg.supabaseUrl, cfg.publishableKey, { auth: { persistSession: true, detectSessionInUrl: true } });
+    session = (await sbc.auth.getSession()).data.session;
+    sbc.auth.onAuthStateChange((_e, s) => { const changed = (s && s.access_token) !== (session && session.access_token); session = s; if (changed) onLoginChanged(); });
+    await onLoginChanged();
+  } catch (_) { renderAccount(); }
+}
+async function onLoginChanged() {
+  myInfo = null;
+  if (session) { try { const r = await authFetch('/api/me'); if (r.ok) myInfo = await r.json(); } catch (_) {} }
+  renderAccount(); renderMyPanel();
+  // 분석 화면의 매일 기록 버튼도 로그인 상태에 맞게 다시
+  blogs.forEach((b) => { b.watch = null; loadWatch(b); });
+}
+function renderAccount() {
+  const el = document.getElementById('account');
+  if (!sbc) { el.innerHTML = ''; return; }
+  el.innerHTML = session
+    ? `<span>${esc((session.user && session.user.email) || '')}${myInfo ? ` · ${esc(myInfo.planName)}` : ''}</span><button type="button" class="ghost" id="logoutBtn">로그아웃</button>`
+    : '<button type="button" class="ghost" id="loginBtn">로그인</button>';
+  if (session) document.getElementById('loginBox').classList.add('hidden');
+}
+let mySel = new Set(), mySeen = new Set();
+function renderMyPanel(msg, isErr) {
+  const el = document.getElementById('myPanel');
+  if (!session || !myInfo) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const me = myInfo.blogs.find((b) => b.role === 'me'), comps = myInfo.blogs.filter((b) => b.role === 'competitor');
+  [...mySel].forEach((id) => { if (!comps.some((c) => c.blogId === id)) mySel.delete(id); });
+  // 처음 보는 경쟁 블로그는 선택이 2개 미만이면 자동으로 비교에 넣는다 (사용자가 직접 뺀 건 다시 넣지 않음)
+  comps.forEach((c) => { if (!mySeen.has(c.blogId)) { mySeen.add(c.blogId); if (mySel.size < 2) mySel.add(c.blogId); } });
+  const chip = (b, isMe) => `<span class="mychip${!isMe && mySel.has(b.blogId) ? ' sel' : ''}">${isMe ? '<span class="role me">내 블로그</span>'
+    : `<label title="비교에 넣기 (최대 2개)"><input type="checkbox" data-mysel="${esc(b.blogId)}"${mySel.has(b.blogId) ? ' checked' : ''}>경쟁</label>`}
+    ${esc(b.name || b.blogId)}<button type="button" data-myrm="${esc(b.blogId)}" aria-label="${esc(b.blogId)} 빼기" title="목록에서 빼기 (쌓인 기록은 지우지 않아요)">×</button></span>`;
+  el.innerHTML = `<h2>내 블로그 <small>${esc(myInfo.planName)} 요금제 · 경쟁 블로그 ${comps.length}/${myInfo.limits.competitors}개 · 등록한 블로그는 매일 방문자 수를 기록해요</small></h2>
+    <div class="mylist">${me ? chip(me, true) : '<span class="hint">내 블로그를 먼저 등록해 주세요.</span>'}${comps.map((c) => chip(c, false)).join('')}</div>
+    <form class="myadd" id="myAddForm"><input id="myAddId" type="text" placeholder="블로그 주소나 아이디" autocomplete="off" />
+      <select id="myAddRole"><option value="${me ? 'competitor' : 'me'}">${me ? '경쟁 블로그로' : '내 블로그로'}</option><option value="${me ? 'me' : 'competitor'}">${me ? '내 블로그로 (바꾸기)' : '경쟁 블로그로'}</option></select>
+      <button type="submit" class="ghost">등록</button>
+      ${me ? '<button type="button" id="myCompare">선택한 블로그로 비교하기</button>' : ''}</form>
+    ${msg ? `<p class="mymsg${isErr ? ' err' : ''}">${esc(msg)}</p>` : ''}`;
+}
+async function myAction(body) {
+  const r = await authFetch('/api/me', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (r.ok) { myInfo = j; renderAccount(); renderMyPanel(body.action === 'add' ? '등록했어요. 오늘부터 매일 기록해요.' : '목록에서 뺐어요. 쌓인 기록은 그대로 있어요.'); blogs.forEach((b) => { b.watch = null; loadWatch(b); }); }
+  else renderMyPanel(j.error || '저장하지 못했어요.', true);
+}
+document.addEventListener('click', async (ev) => {
+  const t = ev.target;
+  if (t.id === 'loginBtn') { const bx = document.getElementById('loginBox'); bx.classList.toggle('hidden'); if (!bx.classList.contains('hidden')) document.getElementById('loginEmail').focus(); }
+  if (t.id === 'logoutBtn' && sbc) { await sbc.auth.signOut(); session = null; onLoginChanged(); }
+  if (t.dataset && t.dataset.myrm) myAction({ action: 'remove', blogId: t.dataset.myrm });
+  if (t.id === 'myCompare' && myInfo) {
+    const me = myInfo.blogs.find((b) => b.role === 'me'); const sel = [...mySel].slice(0, 2);
+    document.getElementById('qMe').value = me ? me.blogId : ''; document.getElementById('qC1').value = sel[0] || ''; document.getElementById('qC2').value = sel[1] || '';
+    document.getElementById('f').requestSubmit();
+  }
+});
+document.addEventListener('change', (ev) => {
+  const t = ev.target; if (!t.dataset || !t.dataset.mysel) return;
+  if (t.checked) { if (mySel.size >= 2) { t.checked = false; renderMyPanel('비교에는 경쟁 블로그를 2개까지 넣을 수 있어요.', true); return; } mySel.add(t.dataset.mysel); } else mySel.delete(t.dataset.mysel);
+  renderMyPanel();
+});
+document.addEventListener('submit', async (ev) => {
+  if (ev.target.id === 'loginForm') {
+    ev.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim(), m = document.getElementById('loginMsg');
+    if (!sbc || !email) return;
+    m.textContent = '보내는 중…';
+    const { error } = await sbc.auth.signInWithOtp({ email, options: { emailRedirectTo: location.origin + location.pathname } });
+    m.textContent = error ? `보내지 못했어요: ${error.message}` : `${email} 메일함에서 로그인 링크를 눌러 주세요. 메일이 안 보이면 스팸함도 확인해 주세요.`;
+  }
+  if (ev.target.id === 'myAddForm') {
+    ev.preventDefault();
+    const id = parseIds(document.getElementById('myAddId').value)[0];
+    if (!id) return renderMyPanel('블로그 주소나 아이디를 넣어 주세요.', true);
+    myAction({ action: 'add', blogId: id, role: document.getElementById('myAddRole').value });
+  }
+});
+
 // ---- 매일 기록 등록 ----
 async function loadWatch(b) {
   if (b.watch) return;
   b.watch = { status: 'loading' };
   try {
-    const r = await (await fetch('/api/watch?id=' + encodeURIComponent(b.data.blogId))).json();
-    b.watch = { status: 'ok', registered: !!r.registered, backend: r.backend || 'none' };
-    // 내 블로그는 자동으로 매일 기록에 등록
-    if (b.role === 'me' && !r.registered && r.backend && r.backend !== 'none') await setWatch(b, true, true);
+    const r = await (await authFetch('/api/watch?id=' + encodeURIComponent(b.data.blogId))).json();
+    b.watch = { status: 'ok', registered: !!r.registered, backend: r.backend || 'none', login: r.login };
+    // 내 블로그 자동 등록: 회원 기능이 없을 때, 또는 로그인했는데 아직 내 블로그가 없을 때만
+    const noMe = myInfo && !myInfo.blogs.some((x) => x.role === 'me');
+    if (b.role === 'me' && !r.registered && r.backend && r.backend !== 'none' && (r.login === undefined || (r.login && noMe))) await setWatch(b, true, true);
   } catch (_) { b.watch = { status: 'error' }; }
   watchRefresh(b);
 }
@@ -666,9 +788,10 @@ async function setWatch(b, on, silent) {
   const prev = b.watch;
   b.watch = { ...(prev || {}), status: 'saving' }; if (!silent) watchRefresh(b);
   try {
-    const r = await fetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: on ? 'register' : 'unregister', role: b.role }) });
+    const r = await authFetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: on ? 'register' : 'unregister', role: b.role }) });
     const j = await r.json();
-    b.watch = r.ok ? { status: 'ok', registered: !!j.registered, backend: j.backend || prev.backend } : { ...prev, status: 'ok', error: j.error };
+    b.watch = r.ok ? { status: 'ok', registered: !!j.registered, backend: j.backend || prev.backend, login: j.login } : { ...prev, status: 'ok', error: j.error };
+    if (r.ok && session) { try { const m = await authFetch('/api/me'); if (m.ok) { myInfo = await m.json(); renderAccount(); renderMyPanel(); } } catch (_) {} }
   } catch (_) { b.watch = { ...prev, status: 'ok', error: '저장하지 못했어요' }; }
   watchRefresh(b);
 }
@@ -681,11 +804,14 @@ function watchControl(b) {
   if (!w || w.status === 'loading') return '<span class="hint">확인 중…</span>';
   if (w.status === 'error' || w.backend === 'none') return '<span class="hint">저장소 없음</span>';
   if (w.status === 'saving') return '<span class="hint">저장 중…</span>';
-  return w.registered
+  if (w.login === false) return sbc ? '<button type="button" class="watchbtn" data-needlogin="1" title="로그인하면 매일 방문자 수를 기록할 수 있어요.">로그인하고 매일 기록</button>' : '<span class="hint">-</span>';
+  const errNote = w.error ? `<span class="hint" style="display:block;margin-top:4px;color:var(--miss)">${esc(w.error)}</span>` : '';
+  return (w.registered
     ? `<button type="button" class="watchbtn on" data-watch="${i}" data-on="0" title="누르면 매일 기록을 멈춰요. 쌓인 기록은 지우지 않아요.">매일 기록 중</button>`
-    : `<button type="button" class="watchbtn" data-watch="${i}" data-on="1" title="매일 방문자 수를 기록해 다음 날부터 그래프에 나타나요.">매일 기록하기</button>`;
+    : `<button type="button" class="watchbtn" data-watch="${i}" data-on="1" title="매일 방문자 수를 기록해 다음 날부터 그래프에 나타나요.">매일 기록하기</button>`) + errNote;
 }
 document.addEventListener('click', (ev) => {
+  if (ev.target && ev.target.closest && ev.target.closest('[data-needlogin]')) { window.scrollTo({ top: 0, behavior: 'smooth' }); document.getElementById('loginBox').classList.remove('hidden'); document.getElementById('loginEmail').focus(); return; }
   const t = ev.target && ev.target.closest && ev.target.closest('[data-watch]');
   if (!t) return;
   const b = blogs[+t.dataset.watch]; if (b) setWatch(b, t.dataset.on === '1');
@@ -695,7 +821,7 @@ function saveExpoOnce(b) {
   if (b.expoSaved || !b.expo || b.expo.status !== 'ok') return;
   b.expoSaved = true;
   const sm = expoSummary(b.expo.data);
-  fetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: 'expo', shown: sm.shown, pending: sm.pending, missing: sm.missing, total: sm.n }) }).catch(() => {});
+  authFetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: 'expo', shown: sm.shown, pending: sm.pending, missing: sm.missing, total: sm.n }) }).catch(() => {});
 }
 
 // ---- 인기글 조회수 (비공식) ----
@@ -1110,6 +1236,7 @@ document.getElementById('demo').onclick = () => {
   document.getElementById('qMe').value = 'blogpeople'; document.getElementById('qC1').value = 'naverofficial'; document.getElementById('qC2').value = 'naver_search';
   document.getElementById('f').requestSubmit();
 };
+initAuth();
 // 주소로 바로 열기: ?me=아이디&c1=아이디&c2=아이디 (예전 형식 ?id=a,b,c 도 지원)
 (() => {
   const sp = new URLSearchParams(location.search);
