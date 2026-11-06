@@ -248,6 +248,22 @@
   @keyframes bob { 0%, 100% { transform: translateY(0); opacity: .5; } 40% { transform: translateY(-6px); opacity: 1; } }
   .skrow { display: grid; grid-template-columns: 170px minmax(0, 1fr) 190px; gap: 16px; align-items: center; padding: 12px 0; }
   @media (max-width: 860px) { .skrow { grid-template-columns: 1fr; gap: 8px; } }
+
+  /* 진행 게이지: 실제로 받은 데이터 양만큼 찬다. 스크롤해도 위에 붙어 있다 */
+  .gauge { position: sticky; top: 8px; z-index: 30; margin-top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px 14px; box-shadow: 0 6px 24px -12px rgba(23, 32, 51, .25); transition: opacity .4s, transform .4s; }
+  .gauge.done { opacity: 0; transform: translateY(-8px); pointer-events: none; }
+  .gtop { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+  .gtop b { font-size: 34px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; min-width: 92px; }
+  .gtop span { font-size: 14.5px; font-weight: 600; color: var(--muted); }
+  .gbar { height: 16px; border-radius: 8px; background: var(--line2); overflow: hidden; }
+  .gbar i { display: block; height: 100%; width: 0; border-radius: 8px; background: linear-gradient(90deg, var(--me), var(--c1) 60%, var(--c2)); background-size: 1160px 100%; transition: width .6s cubic-bezier(.2, .8, .2, 1); position: relative; overflow: hidden; }
+  .gbar i::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255,255,255,.22) 0 12px, transparent 12px 24px); animation: stripe .8s linear infinite; }
+  .gauge.full .gbar i::after { display: none; }
+  @keyframes stripe { from { background-position: 0 0; } to { background-position: 52px 0; } }
+  @media (prefers-reduced-motion: reduce) { .gbar i::after { animation: none; } }
+  .gsteps { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .gsteps .ok { color: var(--ok); font-weight: 600; }
+  .gsteps .ok::before { content: "✓ "; }
   @media (max-width: 860px) {
     .wrap { padding: 16px 16px 60px; }
     form#f { grid-template-columns: 1fr; }
@@ -313,6 +329,7 @@
     </div>
   </section>
 
+  <div id="gauge" class="gauge hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="분석 진행률"><div class="gtop"><b id="gPct">0%</b><span id="gMsg">분석을 시작했어요</span></div><div class="gbar"><i id="gFill"></i></div><div class="gsteps" id="gSteps"></div></div>
   <section id="skel" class="hidden" aria-live="polite"></section>
   <main id="report" class="hidden">
     <section class="blogs" id="sBlogs"></section>
@@ -520,12 +537,13 @@ function rExpo() {
     sub = `${blogs.length > 1 ? esc(nameOf(b)) + ' 기준, ' : ''}${e.data.checkedAt ? fmtDate(e.data.checkedAt) + ' 확인' : ''}`;
   }
   $('verdict').innerHTML = v; $('verdictSub').innerHTML = sub;
+  updateGauge();
 }
 document.addEventListener('click', (ev) => {
   const t = ev.target.closest && ev.target.closest('[data-retry],[data-expo]');
   if (!t) return;
   const b = blogs[+(t.dataset.retry ?? t.dataset.expo)];
-  if (b) loadExposure(b, t.dataset.retry !== undefined);
+  if (b) { gaugeLive = true; loadExposure(b, t.dataset.retry !== undefined); }
 });
 
 // ---- 블로그 카드 ----
@@ -641,7 +659,7 @@ async function loadVisitors(b) {
   b.vis = { status: 'loading' };
   try { const r = await fetch('/api/visitors?id=' + encodeURIComponent(b.data.blogId)); const body = await r.json(); b.vis = r.ok ? { status: 'ok', data: body } : { status: 'error' }; }
   catch (_) { b.vis = { status: 'error' }; }
-  if (blogs.includes(b)) rVisit();
+  if (blogs.includes(b)) { rVisit(); updateGauge(); }
 }
 function visitDays(b) {
   if (!b.vis || b.vis.status !== 'ok') return [];
@@ -809,7 +827,7 @@ async function loadProfile(b) {
     b.prof = r.ok ? { status: 'ok', data: body, map: new Map((body.posts || []).map((x) => [x.logNo, x])) } : { status: 'error' };
   } catch (_) { b.prof = { status: 'error' }; }
   if (!blogs.includes(b)) return;
-  rBlogs(); rScore(); rPop(); rPosts(); if (!blogs.some((x) => !x.vis || x.vis.status === 'loading')) rVisit();
+  rBlogs(); rScore(); rPop(); rPosts(); updateGauge(); if (!blogs.some((x) => !x.vis || x.vis.status === 'loading')) rVisit();
 }
 
 function renderReport() {
@@ -820,6 +838,7 @@ function renderReport() {
   $('foot').innerHTML = blogs.map((b) => b.stats.n ? `${esc(nameOf(b))}: ${fmtDate(b.stats.oldest).slice(0, 10)}부터 ${fmtDate(b.stats.newest).slice(0, 10)}까지 쓴 최근 글 ${b.stats.n}개` : `${esc(nameOf(b))}: 공개 글 없음`).join('<br>')
     + `<br>${fmtDate(blogs[0].data.fetchedAt)}에 분석했어요. 이웃·방문자·공감·조회수·인증 정보는 네이버 모바일 화면의 비공식 값이에요.`;
   blogs.forEach((b) => { if (b.role === 'me') loadExposure(b); loadProfile(b); loadVisitors(b); loadWatch(b); });
+  startGauge();
 }
 
 // ---- 로그인 (Supabase Auth) ----
@@ -961,6 +980,34 @@ function saveExpoOnce(b) {
   authFetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: b.data.blogId, action: 'expo', shown: sm.shown, pending: sm.pending, missing: sm.missing, total: sm.n }) }).catch(() => {});
 }
 
+// ---- 진행 게이지 (실제 받은 데이터 기준) ----
+// 블로그 글 15% + 블로그 정보 25% + 방문자 15% + 제목 노출 45%. 노출을 확인하지 않는 블로그는 노출 몫을 뺀다
+let gaugeHide = null;
+function setGauge(pct, msg, steps) {
+  const g = $('gauge'); clearTimeout(gaugeHide);
+  g.classList.remove('hidden', 'done'); g.classList.toggle('full', pct >= 100);
+  $('gPct').textContent = Math.floor(pct) + '%'; $('gFill').style.width = pct + '%'; $('gMsg').textContent = msg;
+  g.setAttribute('aria-valuenow', Math.floor(pct)); $('gSteps').innerHTML = steps || '';
+  if (pct >= 100) gaugeHide = setTimeout(() => { g.classList.add('done'); gaugeHide = setTimeout(() => g.classList.add('hidden'), 450); }, 1300);
+}
+let gaugeLive = false;
+function updateGauge() {
+  if (!gaugeLive || !blogs.length) return;
+  const n = blogs.length;
+  const prof = blogs.filter((b) => !profLoading(b)).length, vis = blogs.filter((b) => b.vis && b.vis.status !== 'loading').length;
+  const ex = blogs.filter((b) => b.expo || b.role === 'me');
+  const exTotal = ex.reduce((a, b) => a + Math.max(1, Math.min(POST_LIMIT, b.stats.n || 0)), 0);
+  const exDone = ex.reduce((a, b) => a + (!b.expo ? 0 : b.expo.status === 'loading' ? b.expo.done : Math.max(1, Math.min(POST_LIMIT, b.stats.n || 0))), 0);
+  const w = ex.length ? { rss: 15, prof: 25, vis: 15, ex: 45 } : { rss: 25, prof: 45, vis: 30, ex: 0 };
+  const pct = w.rss + w.prof * prof / n + w.vis * vis / n + (ex.length ? w.ex * exDone / exTotal : 0);
+  const step = (label, d, t) => `<span class="${d >= t ? 'ok' : ''}">${label} ${d}/${t}</span>`;
+  const steps = '<span class="ok">블로그 글</span>' + step('블로그 정보', prof, n) + step('방문자', vis, n) + (ex.length ? step('제목 노출', exDone, exTotal) : '');
+  const msg = pct >= 100 ? '분석을 마쳤어요' : prof < n ? '이웃·방문자·인기글을 가져오고 있어요' : ex.length && exDone < exTotal ? '최근 글 제목을 하나씩 검색하고 있어요' : '방문자 기록을 모으고 있어요';
+  setGauge(Math.min(100, pct), msg, steps);
+  if (pct >= 100) gaugeLive = false;
+}
+function startGauge() { gaugeLive = true; updateGauge(); }
+
 // ---- 분석 중 화면 ----
 let skTimer = null;
 function showSkeleton(entries) {
@@ -969,15 +1016,15 @@ function showSkeleton(entries) {
   const row = () => `<div class="skrow"><div class="sk" style="height:14px;width:70%"></div><div class="strip">${'<span class="sk"></span>'.repeat(30)}</div><div class="sk" style="height:20px;width:80%;justify-self:end"></div></div>`;
   const lines = Array.from({ length: 5 }, () => `<div style="display:grid;grid-template-columns:190px repeat(${n},minmax(0,1fr));gap:18px;padding:10px 0"><div class="sk" style="height:13px;width:60%"></div>${'<div><div class="sk" style="height:14px;width:40%;margin-bottom:6px"></div><div class="sk" style="height:5px"></div></div>'.repeat(n)}</div>`).join('');
   const el = $('skel');
-  el.innerHTML = `<div class="loadmsg"><span class="bub" aria-hidden="true"><i></i><i></i><i></i></span><span id="skMsg">${msgs[0]}</span></div>
-    <div class="blogs" style="grid-template-columns:repeat(${matchMedia('(max-width: 860px)').matches ? 1 : n},minmax(0,1fr));margin-top:14px">${entries.map(card).join('')}</div>
+  el.innerHTML = `<div class="blogs" style="grid-template-columns:repeat(${matchMedia('(max-width: 860px)').matches ? 1 : n},minmax(0,1fr));margin-top:14px">${entries.map(card).join('')}</div>
     <div class="panel"><div class="sk" style="height:22px;width:45%;margin-bottom:10px"></div><div class="sk" style="height:12px;width:25%;margin-bottom:14px"></div>${entries.map(row).join('')}</div>
     <div class="panel"><div class="sk" style="height:18px;width:20%;margin-bottom:16px"></div>${lines}</div>`;
   el.classList.remove('hidden'); $('report').classList.add('hidden'); $('intro').classList.add('hidden');
+  gaugeLive = false; setGauge(0, '블로그 글을 불러오고 있어요'); requestAnimationFrame(() => requestAnimationFrame(() => { $('gFill').style.transition = 'width 2.5s ease-out'; $('gFill').style.width = '12%'; $('gPct').textContent = '5%'; }));
   let k = 0; clearInterval(skTimer);
-  skTimer = setInterval(() => { k = Math.min(k + 1, msgs.length - 1); const m = $('skMsg'); if (m) m.textContent = msgs[k]; }, 1400);
+  skTimer = setInterval(() => { k = Math.min(k + 1, msgs.length - 1); if (!gaugeLive) $('gMsg').textContent = msgs[k]; }, 1400);
 }
-function hideSkeleton() { clearInterval(skTimer); $('skel').classList.add('hidden'); $('skel').innerHTML = ''; }
+function hideSkeleton() { clearInterval(skTimer); $('gFill').style.transition = ''; $('skel').classList.add('hidden'); $('skel').innerHTML = ''; }
 
 // ---- 분석 시작 ----
 $('f').onsubmit = async (e) => {
@@ -997,7 +1044,7 @@ $('f').onsubmit = async (e) => {
   if (fails.length) { err.innerHTML = fails.map((f) => `<b>${esc(f.id)}</b>: ${esc(f.body.error)} 블로그 아이디가 맞는지 확인해 주세요. 인플루언서 주소(in.naver.com)의 이름은 블로그 아이디와 다를 수 있어요.`).join('<br>'); err.classList.remove('hidden'); }
   blogs = results.map((r, i) => ({ r, role: entries[i].role })).filter((x) => x.r.ok).map((x) => ({ data: x.r.body, stats: analyze(x.r.body), role: x.role }));
   history.replaceState(null, '', '?' + entries.map((x) => `${x.role}=${encodeURIComponent(x.id)}`).join('&'));
-  if (!blogs.length) { $('report').classList.add('hidden'); $('intro').classList.remove('hidden'); return; }
+  if (!blogs.length) { $('report').classList.add('hidden'); $('intro').classList.remove('hidden'); $('gauge').classList.add('hidden'); return; }
   renderReport();
 };
 $('demo').onclick = () => { $('qMe').value = 'blogpeople'; $('qC1').value = 'naverofficial'; $('qC2').value = 'naver_search'; $('f').requestSubmit(); };
