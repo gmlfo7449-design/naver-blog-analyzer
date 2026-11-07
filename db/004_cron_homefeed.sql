@@ -12,7 +12,7 @@ declare
   v   text := '여기에_CRON_SECRET_값';
   sid uuid;
 begin
-  if v like '여기에%' or length(v) < 8 then raise exception '2번째 줄 작은따옴표 안에 CRON_SECRET 값을 넣고 다시 실행해 주세요.'; end if;
+  if v like '여기에%' or length(v) < 8 then raise exception 'v text := 줄의 작은따옴표 안에 CRON_SECRET 값을 넣고 다시 실행해 주세요.'; end if;
   select id into sid from vault.secrets where name = 'cron_secret';
   if sid is null then perform vault.create_secret(v, 'cron_secret');
   else perform vault.update_secret(sid, v); end if;
